@@ -255,28 +255,6 @@ func (c Color) Type() string {
 	return "color"
 }
 
-// Sixel is a canvas renderer.
-func Sixel(opts ...interface{}) canvas.Writer {
-	resolution := canvas.DPMM(1.0)
-	colorSpace := canvas.DefaultColorSpace
-	for _, opt := range opts {
-		switch o := opt.(type) {
-		case canvas.Resolution:
-			resolution = o
-		case canvas.ColorSpace:
-			colorSpace = o
-		default:
-			return func(io.Writer, *canvas.Canvas) error {
-				return fmt.Errorf("unknown option: %v", opt)
-			}
-		}
-	}
-	return func(w io.Writer, c *canvas.Canvas) error {
-		img := rasterizer.Draw(c, resolution, colorSpace)
-		return sixel.NewEncoder(w).Encode(img)
-	}
-}
-
 func fileExists(name string) bool {
 	fi, err := os.Stat(name)
 	return err == nil && !fi.IsDir()
