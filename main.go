@@ -39,7 +39,7 @@ func main() {
 }
 
 func run(ctx context.Context, appName, appVersion string, cliargs []string) error {
-	var all bool
+	var all, list, match bool
 	var fg colors.Color = colors.FromStdColor(color.RGBA{R: 0, G: 0, B: 0})
 	var bg colors.Color = colors.FromStdColor(color.RGBA{R: 255, G: 255, B: 255})
 	var size, margin, dpi int
@@ -49,8 +49,15 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 		Short:   appName + ", a font viewer tool",
 		Version: appVersion,
 		Args: func(_ *cobra.Command, args []string) error {
-			if all != (len(args) == 0) {
-				return errors.New("requires --all or one or more args")
+			switch hasArgs := len(args) != 0; {
+			case all && hasArgs,
+				list && hasArgs,
+				match && !hasArgs:
+				return errors.New("requires --all or one or more args, or --list, or --match and one or more args")
+			case all && list,
+				all && match,
+				match && list:
+				return errors.New("--all, --list, and --match must be exclusive")
 			}
 			return nil
 		},
@@ -60,21 +67,37 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 				return err
 			}
 			fgColor, bgColor := convColor(fg), convColor(bg)
-			f := render
-			if all {
-				f = renderAll
+			f := do
+			switch {
+			case all:
+				f = doAll
+			case list:
+				f = doList
+			case match:
+				f = doMatch
 			}
-			return f(os.Stdout, sysfonts, fgColor, bgColor, size, dpi, margin, style, variant, args...)
+			return f(os.Stdout, sysfonts, Params{
+				FG:      fgColor,
+				BG:      bgColor,
+				Size:    size,
+				DPI:     dpi,
+				Margin:  margin,
+				Style:   style,
+				Variant: variant,
+				Args:    args,
+			})
 		},
 	}
 	c.Flags().BoolVar(&all, "all", false, "show all system fonts")
+	c.Flags().BoolVar(&list, "list", false, "list system fonts")
+	c.Flags().BoolVar(&match, "match", false, "match system fonts")
 	c.Flags().Var(NewColor(&fg), "fg", "foreground color")
 	c.Flags().Var(NewColor(&bg), "bg", "background color")
 	c.Flags().IntVar(&size, "size", 72, "font size")
 	c.Flags().IntVar(&margin, "margin", 2, "margin")
 	c.Flags().IntVar(&dpi, "dpi", 100, "dpi")
-	c.Flags().Var(NewStyle(&style), "font-style", "font style")
-	c.Flags().Var(NewVariant(&variant), "font-variant", "font variant")
+	c.Flags().Var(NewStyle(&style), "style", "font style")
+	c.Flags().Var(NewVariant(&variant), "variant", "font variant")
 	c.SetVersionTemplate("{{ .Name }} {{ .Version }}\n")
 	c.InitDefaultHelpCmd()
 	c.SetArgs(cliargs[1:])
@@ -82,32 +105,33 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 	return c.ExecuteContext(ctx)
 }
 
-func convColor(c colors.Color) color.Color {
-	clr := c.ToRGB()
-	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: 0xff}
+type Params struct {
+	FG      color.Color
+	BG      color.Color
+	Size    int
+	DPI     int
+	Margin  int
+	Style   canvas.FontStyle
+	Variant canvas.FontVariant
+	Args    []string
 }
 
-func render(w io.Writer, sysfonts *font.SystemFonts, fg, bg color.Color, size, dpi, margin int, style canvas.FontStyle, variant canvas.FontVariant, v ...string) error {
-	for i := 0; i < len(v); i++ {
-		name, pathstr, ff, err := openFont(sysfonts, v[i], style)
-		if err != nil {
-			if name == "" {
-				fmt.Fprintf(w, "error: arg %d: %v\n", i, err)
-			} else {
-				fmt.Fprintf(w, "%q %s -- error: %v\n", name, pathstr, err)
+// do renders the specified font queries to w.
+func do(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+	for i := 0; i < len(v.Args); i++ {
+		font, ff, err := openFont(sysfonts, v.Args[i], v.Style)
+		switch {
+		case font == nil || font.Family == "":
+			fmt.Fprintf(w, "error: arg %d: %v\n", i, err)
+		case err != nil:
+			fmt.Fprintf(w, "%s %q -- error: %v\n", font.Path, font.Family, err)
+		default:
+			if err := render(w, font, ff, v); err != nil {
+				return err
 			}
-		} else if err := renderFont(
-			w,
-			fg, bg,
-			size, dpi, margin,
-			style, variant,
-			pathstr,
-			name, ff,
-		); err != nil {
-			return err
 		}
 		nl := []byte{'\n'}
-		if i != len(v)-1 && err == nil {
+		if i != len(v.Args)-1 && err == nil {
 			nl = append(nl, '\n')
 		}
 		w.Write(nl)
@@ -115,99 +139,155 @@ func render(w io.Writer, sysfonts *font.SystemFonts, fg, bg color.Color, size, d
 	return nil
 }
 
-func renderAll(w io.Writer, sysfonts *font.SystemFonts, fg, bg color.Color, size, dpi, margin int, style canvas.FontStyle, variant canvas.FontVariant, _ ...string) error {
-	keys := maps.Keys(sysfonts.Fonts)
-	slices.Sort(keys)
-	for i := 0; i < len(keys); i++ {
-		fontStyleKey := font.Regular
-		font, ok := sysfonts.Fonts[keys[i]][fontStyleKey]
-		if !ok {
-			styles := maps.Keys(sysfonts.Fonts[keys[i]])
-			slices.Sort(styles)
-			font, fontStyleKey = sysfonts.Fonts[keys[i]][styles[0]], styles[0]
-		}
-		ff := canvas.NewFontFamily(font.Family)
-		if err := ff.LoadFontFile(font.Filename, style); err != nil {
-			fmt.Fprintf(w, "%q %s -- error: %v\n", font.Family, font.Filename, err)
-			if i != len(keys)-1 {
-				w.Write([]byte{'\n'})
+// doAll renders all system fonts to w.
+func doAll(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+	families := maps.Keys(sysfonts.Fonts)
+	slices.Sort(families)
+	for i := 0; i < len(families); i++ {
+		styles := maps.Keys(sysfonts.Fonts[families[i]])
+		slices.Sort(styles)
+		for _, style := range styles {
+			font := NewFont(sysfonts.Fonts[families[i]][style])
+			ff := canvas.NewFontFamily(font.Family)
+			if err := ff.LoadFontFile(font.Path, v.Style); err != nil {
+				fmt.Fprintf(w, "%s -- error: %v\n", font, err)
+				if i != len(families)-1 {
+					w.Write([]byte{'\n'})
+				}
+				continue
 			}
-			continue
-		}
-		if err := renderFont(w, fg, bg, size, dpi, margin, style, variant, font.Filename, font.Family, ff); err != nil {
-			return err
-		}
-		nl := []byte{'\n'}
-		if i != len(keys)-1 {
-			nl = append(nl, '\n')
-		}
-		if _, err := w.Write(nl); err != nil {
-			return err
+			if err := render(w, font, ff, v); err != nil {
+				return err
+			}
+			nl := []byte{'\n'}
+			if i != len(families)-1 {
+				nl = append(nl, '\n')
+			}
+			if _, err := w.Write(nl); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func renderFont(w io.Writer, fg, bg color.Color, size, dpi, margin int, style canvas.FontStyle, variant canvas.FontVariant, pathstr, name string, font *canvas.FontFamily) error {
-	fmt.Fprintf(w, "%q %s\n", name, pathstr)
+func doList(w io.Writer, sysfonts *font.SystemFonts, _ Params) error {
+	families := maps.Keys(sysfonts.Fonts)
+	slices.Sort(families)
+	for i := 0; i < len(families); i++ {
+		fmt.Fprintln(w, "---")
+		fmt.Fprintf(w, "family: %q\n", families[i])
+		fmt.Fprintln(w, "styles:")
+		styles := maps.Keys(sysfonts.Fonts[families[i]])
+		slices.Sort(styles)
+		for _, style := range styles {
+			fmt.Fprintf(w, "  %s: %s\n", style, sysfonts.Fonts[families[i]][style].Filename)
+		}
+	}
+	return nil
+}
+
+func doMatch(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+	for _, name := range v.Args {
+		if font := Match(sysfonts, name, v.Style); font != nil {
+			font.WriteYAML(w)
+		}
+	}
+	return nil
+}
+
+func render(w io.Writer, font *Font, ff *canvas.FontFamily, v Params) error {
+	fmt.Fprintf(w, "%s\n", font)
 	// create canvas and context
 	c := canvas.New(100, 100)
 	ctx := canvas.NewContext(c)
 
 	// draw text
-	face := font.Face(float64(size), fg, style, variant)
+	face := ff.Face(float64(v.Size), v.FG, v.Style, v.Variant)
 	txt, _, err := face.ToPath("the quick brown fox jumps over the lazy dog")
 	if err != nil {
 		return err
 	}
 	ctx.SetZIndex(1)
-	ctx.SetFillColor(fg)
+	ctx.SetFillColor(v.FG)
 	ctx.DrawPath(0, 0, txt)
 
 	// fit canvas to context
-	c.Fit(float64(margin))
+	c.Fit(float64(v.Margin))
 
 	// draw background
 	width, height := ctx.Size()
 	ctx.SetZIndex(-1)
-	ctx.SetFillColor(bg)
+	ctx.SetFillColor(v.BG)
 	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
 
 	ctx.Close()
 
 	// rasterize canvas to image
-	img := rasterizer.Draw(c, canvas.DPI(float64(dpi)), canvas.DefaultColorSpace)
+	img := rasterizer.Draw(c, canvas.DPI(float64(v.DPI)), canvas.DefaultColorSpace)
 	return sixel.NewEncoder(w).Encode(img)
 }
 
 // openFont opens the specified font.
-func openFont(sysfonts *font.SystemFonts, query string, style canvas.FontStyle) (string, string, *canvas.FontFamily, error) {
-	var family string
-	var pathstr string
-	if fileExists(query) {
-		family = titleCase(strings.TrimSuffix(filepath.Base(query), filepath.Ext(query)))
-		pathstr = query
-	} else {
-		f, ok := sysfonts.Match(query, font.Regular)
-		if !ok {
-			return "", "", nil, fmt.Errorf("unable to match font %q", query)
+func openFont(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) (*Font, *canvas.FontFamily, error) {
+	var font *Font
+	switch {
+	case fileExists(name):
+		font = &Font{
+			Path:   name,
+			Family: titleCase(strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))),
 		}
-		family = fontName(f)
-		pathstr = f.Filename
+	default:
+		if font = Match(sysfonts, name, style); font == nil {
+			return nil, nil, fmt.Errorf("unable to match font %q", name)
+		}
 	}
-	font := canvas.NewFontFamily(family)
-	if err := font.LoadFontFile(pathstr, style); err != nil {
-		return family, pathstr, nil, err
+	ff := canvas.NewFontFamily(font.Family)
+	if err := ff.LoadFontFile(font.Path, style); err != nil {
+		return font, nil, err
 	}
-	return family, pathstr, font, nil
+	return font, ff, nil
 }
 
-func fontName(f font.FontMetadata) string {
-	switch {
-	case f.Family != "":
-		return f.Family
+type Font struct {
+	Path   string
+	Family string
+	Face   string
+}
+
+func NewFont(md font.FontMetadata) *Font {
+	family := md.Family
+	if family == "" {
+		family = titleCase(strings.TrimSuffix(filepath.Base(md.Filename), filepath.Ext(md.Filename)))
 	}
-	return titleCase(strings.TrimSuffix(filepath.Base(f.Filename), filepath.Ext(f.Filename)))
+	return &Font{
+		Path:   md.Filename,
+		Family: family,
+		Face:   fmt.Sprintf("%s (%s)", family, md.Style),
+	}
+}
+
+func Match(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) *Font {
+	md, ok := sysfonts.Match(name, font.ParseStyle(style.String()))
+	if !ok {
+		return nil
+	}
+	return NewFont(md)
+}
+
+func (font *Font) String() string {
+	name := font.Face
+	if name == "" {
+		name = font.Family
+	}
+	return fmt.Sprintf("%q: %s", name, font.Path)
+}
+
+func (font *Font) WriteYAML(w io.Writer) {
+	fmt.Fprintln(w, "---")
+	fmt.Fprintf(w, "path: %s\n", font.Path)
+	fmt.Fprintf(w, "family: %q\n", font.Family)
+	fmt.Fprintf(w, "face: %q\n", font.Face)
 }
 
 func titleCase(name string) string {
@@ -282,8 +362,8 @@ func (v Style) Set(s string) error {
 	if italicRE.MatchString(str) {
 		italic, str = true, italicRE.ReplaceAllString(str, "")
 	}
-	switch str {
-	case "regular", "400":
+	switch strings.TrimSpace(str) {
+	case "regular", "", "400", "0":
 		*v.v = canvas.FontRegular
 	case "thin", "100":
 		*v.v = canvas.FontThin
@@ -348,6 +428,16 @@ func (v Variant) Set(s string) error {
 
 func (v Variant) Type() string {
 	return "font-variant"
+}
+
+func convColor(c colors.Color) color.Color {
+	clr := c.ToRGB()
+	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: 0xff}
+}
+
+func isDir(name string) bool {
+	fi, err := os.Stat(name)
+	return err == nil && fi.IsDir()
 }
 
 func fileExists(name string) bool {

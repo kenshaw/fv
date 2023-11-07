@@ -5,6 +5,7 @@
 
 *.ttf
 *.ttc
+*.otf
 *.woff
 *.woff2
 *.txt
