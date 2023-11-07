@@ -144,7 +144,7 @@ func renderFont(w io.Writer, fg, bg color.Color, dpi, margin int, pathstr, name 
 	fmt.Fprintf(w, "%q %s\n", name, pathstr)
 	// create canvas and context
 	c := canvas.New(100, 100)
-	cctx := canvas.NewContext(c)
+	ctx := canvas.NewContext(c)
 
 	// draw text
 	face := font.Face(72, fg, canvas.FontRegular, canvas.FontNormal)
@@ -152,20 +152,20 @@ func renderFont(w io.Writer, fg, bg color.Color, dpi, margin int, pathstr, name 
 	if err != nil {
 		return err
 	}
-	cctx.SetZIndex(1)
-	cctx.SetFillColor(fg)
-	cctx.DrawPath(0, 0, txt)
+	ctx.SetZIndex(1)
+	ctx.SetFillColor(fg)
+	ctx.DrawPath(0, 0, txt)
 
 	// fit canvas to context
 	c.Fit(float64(margin))
 
 	// draw background
-	width, height := cctx.Size()
-	cctx.SetZIndex(-1)
-	cctx.SetFillColor(bg)
-	cctx.DrawPath(0, 0, canvas.Rectangle(width, height))
+	width, height := ctx.Size()
+	ctx.SetZIndex(-1)
+	ctx.SetFillColor(bg)
+	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
 
-	cctx.Close()
+	ctx.Close()
 
 	// rasterize canvas to image
 	img := rasterizer.Draw(c, canvas.DPI(float64(dpi)), canvas.DefaultColorSpace)
