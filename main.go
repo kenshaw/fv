@@ -6,8 +6,10 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"image"
 	"image/color"
-	_ "image/png"
+	"image/color/palette"
+	"image/draw"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,7 +18,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/mattn/go-sixel"
+	"github.com/BourgeoisBear/rasterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tdewolff/canvas"
@@ -77,7 +79,10 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			case match:
 				f = doMatch
 			}
+			r, typ, _ := renderer()
 			return f(os.Stdout, sysfonts, Params{
+				Render:  r,
+				Type:    typ,
 				FG:      fgColor,
 				BG:      bgColor,
 				Size:    size,
@@ -107,6 +112,8 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 }
 
 type Params struct {
+	Render  func(io.Writer, image.Image) error
+	Type    string
 	FG      color.Color
 	BG      color.Color
 	Size    int
@@ -119,6 +126,9 @@ type Params struct {
 
 // do renders the specified font queries to w.
 func do(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+	if v.Render == nil || v.Type == "" {
+		return errors.New("terminal does not support graphics")
+	}
 	var fonts []*Font
 	// collect fonts
 	for i := 0; i < len(v.Args); i++ {
@@ -133,6 +143,9 @@ func do(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
 
 // doAll renders all system fonts to w.
 func doAll(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+	if v.Render == nil || v.Type == "" {
+		return errors.New("terminal does not support graphics")
+	}
 	families := maps.Keys(sysfonts.Fonts)
 	slices.Sort(families)
 	// collect fonts
@@ -185,6 +198,37 @@ func render(w io.Writer, fonts []*Font, v Params) error {
 		w.Write(nl)
 	}
 	return nil
+}
+
+func renderer() (func(io.Writer, image.Image) error, string, bool) {
+	var s rasterm.Settings
+	switch sixel, _ := rasterm.IsSixelCapable(); {
+	case rasterm.IsTmuxScreen():
+		return nil, "", false
+	case rasterm.IsTermKitty():
+		return s.KittyWriteImage, "kitty", true
+	case rasterm.IsTermItermWez():
+		return s.ItermWriteImage, "iterm", true
+	case sixel:
+		return func(w io.Writer, img image.Image) error {
+			pi, ok := img.(*image.Paletted)
+			if !ok {
+				return errors.New("invalid image")
+			}
+			return s.SixelWriteImage(w, pi)
+		}, "sixel", true
+	}
+	return nil, "", false
+}
+
+func palettize(src image.Image) *image.Paletted {
+	if pi, ok := src.(*image.Paletted); ok {
+		return pi
+	}
+	b := src.Bounds()
+	img := image.NewPaletted(b, palette.Plan9)
+	draw.FloydSteinberg.Draw(img, b, src, image.Point{})
+	return img
 }
 
 type Font struct {
@@ -307,9 +351,9 @@ func (font *Font) Render(w io.Writer, v Params) error {
 
 	ctx.Close()
 
-	// rasterize canvas to image
+	// rasterize canvas
 	img := rasterizer.Draw(c, canvas.DPI(float64(v.DPI)), canvas.DefaultColorSpace)
-	return sixel.NewEncoder(w).Encode(img)
+	return v.Render(w, palettize(img))
 }
 
 func titleCase(name string) string {
