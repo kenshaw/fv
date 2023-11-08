@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,6 @@ import (
 	fontpkg "github.com/tdewolff/canvas/font"
 	"github.com/tdewolff/canvas/renderers/rasterizer"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"gopkg.in/go-playground/colors.v1"
 )
 
