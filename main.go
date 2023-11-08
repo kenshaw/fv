@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tdewolff/canvas"
-	"github.com/tdewolff/canvas/font"
+	fontpkg "github.com/tdewolff/canvas/font"
 	"github.com/tdewolff/canvas/renderers/rasterizer"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -71,7 +71,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sysfonts, err := font.FindSystemFonts(font.DefaultFontDirs())
+			sysfonts, err := fontpkg.FindSystemFonts(fontpkg.DefaultFontDirs())
 			if err != nil {
 				return err
 			}
@@ -165,7 +165,7 @@ func (v *Params) Template() (*template.Template, error) {
 }
 
 // do renders the specified font queries to w.
-func do(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
+func do(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
 	if v.Render == nil || v.Type == "" {
 		return errors.New("terminal does not support graphics")
 	}
@@ -182,7 +182,7 @@ func do(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
 }
 
 // doAll renders all system fonts to w.
-func doAll(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
+func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
 	if v.Render == nil || v.Type == "" {
 		return errors.New("terminal does not support graphics")
 	}
@@ -200,7 +200,7 @@ func doAll(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
 	return render(w, fonts, v)
 }
 
-func doList(w io.Writer, sysfonts *font.SystemFonts, _ *Params) error {
+func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Params) error {
 	families := maps.Keys(sysfonts.Fonts)
 	slices.Sort(families)
 	for i := 0; i < len(families); i++ {
@@ -216,7 +216,7 @@ func doList(w io.Writer, sysfonts *font.SystemFonts, _ *Params) error {
 	return nil
 }
 
-func doMatch(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
+func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
 	for _, name := range v.Args {
 		if font := Match(sysfonts, name, v.Style); font != nil {
 			font.WriteYAML(w)
@@ -245,9 +245,9 @@ func render(w io.Writer, fonts []*Font, v *Params) error {
 }
 
 type exec struct {
-	Size   int
-	Family string
-	Style  string
+	Size  int
+	Name  string
+	Style string
 }
 
 func renderer() (func(io.Writer, image.Image) error, string, bool) {
@@ -284,10 +284,12 @@ func palettize(src image.Image) *image.Paletted {
 type Font struct {
 	Path   string
 	Family string
-	Face   string
+	Name   string
+	Style  string
+	once   sync.Once
 }
 
-func NewFont(md font.FontMetadata) *Font {
+func NewFont(md fontpkg.FontMetadata) *Font {
 	family := md.Family
 	if family == "" {
 		family = titleCase(strings.TrimSuffix(filepath.Base(md.Filename), filepath.Ext(md.Filename)))
@@ -295,7 +297,7 @@ func NewFont(md font.FontMetadata) *Font {
 	return &Font{
 		Path:   md.Filename,
 		Family: family,
-		Face:   fmt.Sprintf("%s (%s)", family, md.Style),
+		Style:  md.Style.String(),
 	}
 }
 
@@ -306,8 +308,8 @@ func NewFontForPath(path string) *Font {
 	}
 }
 
-func Match(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) *Font {
-	md, ok := sysfonts.Match(name, font.ParseStyle(style.String()))
+func Match(sysfonts *fontpkg.SystemFonts, name string, style canvas.FontStyle) *Font {
+	md, ok := sysfonts.Match(name, fontpkg.ParseStyle(style.String()))
 	if !ok {
 		return nil
 	}
@@ -315,7 +317,7 @@ func Match(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) *Fon
 }
 
 // Open opens fonts.
-func Open(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) ([]*Font, error) {
+func Open(sysfonts *fontpkg.SystemFonts, name string, style canvas.FontStyle) ([]*Font, error) {
 	var v []*Font
 	switch fi, err := os.Stat(name); {
 	case err == nil && fi.IsDir():
@@ -346,10 +348,17 @@ func Open(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) ([]*F
 
 var extRE = regexp.MustCompile(`(?i)\.(ttf|ttc|otf|woff|woff2|sfnt)$`)
 
+func (font *Font) BestName() string {
+	if font.Name != "" {
+		return font.Name
+	}
+	return font.Family
+}
+
 func (font *Font) String() string {
-	name := font.Face
-	if name == "" {
-		name = font.Family
+	name := font.BestName()
+	if font.Style != "" {
+		name += " (" + font.Style + ")"
 	}
 	return fmt.Sprintf("%q: %s", name, font.Path)
 }
@@ -357,8 +366,8 @@ func (font *Font) String() string {
 func (font *Font) WriteYAML(w io.Writer) {
 	fmt.Fprintln(w, "---")
 	fmt.Fprintf(w, "path: %s\n", font.Path)
-	fmt.Fprintf(w, "family: %q\n", font.Family)
-	fmt.Fprintf(w, "face: %q\n", font.Face)
+	fmt.Fprintf(w, "family: %q\n", font.BestName())
+	fmt.Fprintf(w, "style: %q\n", font.Style)
 }
 
 func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
@@ -366,22 +375,32 @@ func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
 	if err := ff.LoadFontFile(font.Path, style); err != nil {
 		return nil, err
 	}
+	font.once.Do(func() {
+		face := ff.Face(16)
+		if v := face.Font.SFNT.Name.Get(fontpkg.NameFontFamily); 0 < len(v) {
+			font.Name = v[0].String()
+		}
+		if v := face.Font.SFNT.Name.Get(fontpkg.NameFontSubfamily); 0 < len(v) {
+			font.Style = fontpkg.ParseStyle(v[0].String()).String()
+		}
+	})
 	return ff, nil
 }
 
 func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
-	// generate text
-	buf := new(bytes.Buffer)
-	if err := tpl.Execute(buf, exec{
-		Size:   v.Size,
-		Family: font.Family,
-		Style:  v.Style.String(),
-	}); err != nil {
+	// load font
+	ff, err := font.Load(v.Style)
+	if err != nil {
 		return err
 	}
 
-	ff, err := font.Load(v.Style)
-	if err != nil {
+	// generate text
+	buf := new(bytes.Buffer)
+	if err := tpl.Execute(buf, exec{
+		Size:  v.Size,
+		Name:  font.BestName(),
+		Style: font.Style,
+	}); err != nil {
 		return err
 	}
 

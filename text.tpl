@@ -1,4 +1,4 @@
-{{ size (inc .Size 2) }}{{ .Family }}, {{ .Style }}
+{{ size (inc .Size 2) }}{{ .Name }}, {{ .Style }}
 {{ size .Size }}abcdefghijklmnopqrstuvwxyz
 ABCDEFGHIJKLMNOPQRSTUVWXYZ
 0123456789.<:,>;('~"){!@#$%^&*?`=}[_\-/+]
