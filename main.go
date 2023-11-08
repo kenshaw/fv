@@ -253,33 +253,27 @@ type TemplateData struct {
 
 func renderer() (func(io.Writer, image.Image) error, string, bool) {
 	var s rasterm.Settings
-	switch sixel, _ := rasterm.IsSixelCapable(); {
+	switch {
 	case rasterm.IsTmuxScreen():
 		return nil, "", false
 	case rasterm.IsTermKitty():
 		return s.KittyWriteImage, "kitty", true
 	case rasterm.IsTermItermWez():
 		return s.ItermWriteImage, "iterm", true
-	case sixel:
-		return func(w io.Writer, img image.Image) error {
-			pi, ok := img.(*image.Paletted)
-			if !ok {
-				return errors.New("invalid image")
-			}
-			return s.SixelWriteImage(w, pi)
-		}, "sixel", true
+	default:
+		if ok, _ := rasterm.IsSixelCapable(); ok {
+			return func(w io.Writer, src image.Image) error {
+				if _, ok := src.(*image.Paletted); !ok {
+					b := src.Bounds()
+					img := image.NewPaletted(b, palette.Plan9)
+					draw.FloydSteinberg.Draw(img, b, src, image.Point{})
+					src = img
+				}
+				return s.SixelWriteImage(w, src.(*image.Paletted))
+			}, "sixel", true
+		}
 	}
 	return nil, "", false
-}
-
-func palettize(src image.Image) *image.Paletted {
-	if pi, ok := src.(*image.Paletted); ok {
-		return pi
-	}
-	b := src.Bounds()
-	img := image.NewPaletted(b, palette.Plan9)
-	draw.FloydSteinberg.Draw(img, b, src, image.Point{})
-	return img
 }
 
 type Font struct {
@@ -441,8 +435,11 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 	ctx.Close()
 
 	// rasterize canvas
-	img := rasterizer.Draw(c, canvas.DPI(float64(v.DPI)), canvas.DefaultColorSpace)
-	return v.Render(w, palettize(img))
+	return v.Render(w, rasterizer.Draw(
+		c,
+		canvas.DPI(float64(v.DPI)),
+		canvas.DefaultColorSpace),
+	)
 }
 
 func breakLines(buf []byte, size int) ([]string, []int) {
