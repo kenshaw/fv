@@ -60,12 +60,13 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			switch hasArgs := len(args) != 0; {
 			case all && hasArgs,
 				list && hasArgs,
-				match && !hasArgs:
+				match && !hasArgs,
+				!all && !list && !match && !hasArgs:
 				return errors.New("requires --all or one or more args, or --list, or --match and one or more args")
 			case all && list,
 				all && match,
 				match && list:
-				return errors.New("--all, --list, and --match must be exclusive")
+				return errors.New("--all, --list, and --match are exclusive")
 			}
 			return nil
 		},
@@ -84,7 +85,11 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			case match:
 				f = doMatch
 			}
-			r, typ, _ := renderer()
+			var r func(io.Writer, image.Image) error
+			var typ string
+			if all || !(match || list) {
+				r, typ, _ = renderer()
+			}
 			return f(os.Stdout, sysfonts, &Params{
 				Render:  r,
 				Type:    typ,
