@@ -1,6 +1,8 @@
-{{ size (inc .Size 4) }}{{ .Name }}, {{ .Weight }}
+{{ size (inc .Size 2) }}{{ .Family }}, {{ .Style }}
 {{ size .Size }}abcdefghijklmnopqrstuvwxyz
 ABCDEFGHIJKLMNOPQRSTUVWXYZ
 0123456789.<:,>;('~"){!@#$%^&*?`=}[_\-/+]
-{{ range $i := (step .Size (inc .Size ) 2) }}{{ size $i }}{{ range $phrase := .Phrases }}{{ phrase }}.
-{{ end }}{{ end }}
+The quick brown fox jumps over the lazy dog.
+{{ size (inc .Size 4) }}Pack my box with five dozen liquor jugs.
+{{ size (inc .Size 8) }}Jackdaws love my big sphinx of quartz.
+{{ size (inc .Size 12) }}The five boxing wizards jump quickly.

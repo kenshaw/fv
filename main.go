@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"errors"
@@ -15,7 +16,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"text/template"
 	"unicode"
 
 	"github.com/BourgeoisBear/rasterm"
@@ -47,6 +51,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 	var bg colors.Color = colors.FromStdColor(color.RGBA{R: 255, G: 255, B: 255})
 	var size, margin, dpi int
 	style, variant := canvas.FontRegular, canvas.FontNormal
+	var text string
 	c := &cobra.Command{
 		Use:     appName + " [flags] <font1> [font2, ..., fontN]",
 		Short:   appName + ", a font viewer tool",
@@ -80,7 +85,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 				f = doMatch
 			}
 			r, typ, _ := renderer()
-			return f(os.Stdout, sysfonts, Params{
+			return f(os.Stdout, sysfonts, &Params{
 				Render:  r,
 				Type:    typ,
 				FG:      fgColor,
@@ -90,6 +95,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 				Margin:  margin,
 				Style:   style,
 				Variant: variant,
+				Text:    text,
 				Args:    args,
 			})
 		},
@@ -104,6 +110,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 	c.Flags().IntVar(&dpi, "dpi", 100, "dpi")
 	c.Flags().Var(NewStyle(&style), "style", "font style")
 	c.Flags().Var(NewVariant(&variant), "variant", "font variant")
+	c.Flags().StringVar(&text, "text", "", "text")
 	c.SetVersionTemplate("{{ .Name }} {{ .Version }}\n")
 	c.InitDefaultHelpCmd()
 	c.SetArgs(cliargs[1:])
@@ -121,11 +128,39 @@ type Params struct {
 	Margin  int
 	Style   canvas.FontStyle
 	Variant canvas.FontVariant
+	Text    string
 	Args    []string
+	once    sync.Once
+	tpl     *template.Template
+}
+
+func (v *Params) Template() (*template.Template, error) {
+	var err error
+	v.once.Do(func() {
+		s := v.Text
+		if s == "" {
+			s = string(textTpl)
+		}
+		v.tpl, err = template.New("").Funcs(map[string]interface{}{
+			"size": func(size int) string {
+				return fmt.Sprintf("\x00%d\x00", size)
+			},
+			"inc": func(a, b int) int {
+				return a + b
+			},
+		}).Parse(s)
+	})
+	switch {
+	case err != nil:
+		return nil, err
+	case v.tpl == nil:
+		return nil, errors.New("invalid template state")
+	}
+	return v.tpl, nil
 }
 
 // do renders the specified font queries to w.
-func do(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+func do(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
 	if v.Render == nil || v.Type == "" {
 		return errors.New("terminal does not support graphics")
 	}
@@ -142,7 +177,7 @@ func do(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
 }
 
 // doAll renders all system fonts to w.
-func doAll(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+func doAll(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
 	if v.Render == nil || v.Type == "" {
 		return errors.New("terminal does not support graphics")
 	}
@@ -160,7 +195,7 @@ func doAll(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
 	return render(w, fonts, v)
 }
 
-func doList(w io.Writer, sysfonts *font.SystemFonts, _ Params) error {
+func doList(w io.Writer, sysfonts *font.SystemFonts, _ *Params) error {
 	families := maps.Keys(sysfonts.Fonts)
 	slices.Sort(families)
 	for i := 0; i < len(families); i++ {
@@ -176,7 +211,7 @@ func doList(w io.Writer, sysfonts *font.SystemFonts, _ Params) error {
 	return nil
 }
 
-func doMatch(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+func doMatch(w io.Writer, sysfonts *font.SystemFonts, v *Params) error {
 	for _, name := range v.Args {
 		if font := Match(sysfonts, name, v.Style); font != nil {
 			font.WriteYAML(w)
@@ -185,9 +220,13 @@ func doMatch(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
 	return nil
 }
 
-func render(w io.Writer, fonts []*Font, v Params) error {
+func render(w io.Writer, fonts []*Font, v *Params) error {
+	tpl, err := v.Template()
+	if err != nil {
+		return err
+	}
 	for i := 0; i < len(fonts); i++ {
-		err := fonts[i].Render(w, v)
+		err := fonts[i].Render(w, tpl, v)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
 		}
@@ -198,6 +237,12 @@ func render(w io.Writer, fonts []*Font, v Params) error {
 		w.Write(nl)
 	}
 	return nil
+}
+
+type exec struct {
+	Size   int
+	Family string
+	Style  string
 }
 
 func renderer() (func(io.Writer, image.Image) error, string, bool) {
@@ -319,34 +364,48 @@ func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
 	return ff, nil
 }
 
-func (font *Font) Render(w io.Writer, v Params) error {
+func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
+	// generate text
+	buf := new(bytes.Buffer)
+	if err := tpl.Execute(buf, exec{
+		Size:   v.Size,
+		Family: font.Family,
+		Style:  v.Style.String(),
+	}); err != nil {
+		return err
+	}
+
 	ff, err := font.Load(v.Style)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(w, "%s\n", font)
+
 	// create canvas and context
 	c := canvas.New(100, 100)
 	ctx := canvas.NewContext(c)
 
-	// draw text
-	face := ff.Face(float64(v.Size), v.FG, v.Style, v.Variant)
-	txt, _, err := face.ToPath("the quick brown fox jumps over the lazy dog")
-	if err != nil {
-		return err
-	}
 	ctx.SetZIndex(1)
 	ctx.SetFillColor(v.FG)
-	ctx.DrawPath(0, 0, txt)
+
+	// draw text
+	lines, sizes := breakLines(buf.Bytes(), v.Size)
+	for i, y := 0, float64(0); i < len(lines); i++ {
+		face := ff.Face(float64(sizes[i]), v.FG, v.Style, v.Variant)
+		txt := canvas.NewTextBox(face, strings.TrimSpace(lines[i]), 0, 0, canvas.Left, canvas.Top, 0, 0)
+		b := txt.Bounds()
+		ctx.DrawText(0, y, txt)
+		y += b.Y
+	}
 
 	// fit canvas to context
 	c.Fit(float64(v.Margin))
 
 	// draw background
-	width, height := ctx.Size()
 	ctx.SetZIndex(-1)
 	ctx.SetFillColor(v.BG)
+	width, height := ctx.Size()
 	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
 
 	ctx.Close()
@@ -355,6 +414,24 @@ func (font *Font) Render(w io.Writer, v Params) error {
 	img := rasterizer.Draw(c, canvas.DPI(float64(v.DPI)), canvas.DefaultColorSpace)
 	return v.Render(w, palettize(img))
 }
+
+func breakLines(buf []byte, size int) ([]string, []int) {
+	var lines []string
+	var sizes []int
+	for _, line := range bytes.Split(buf, []byte{'\n'}) {
+		sz := size
+		if m := sizeRE.FindSubmatch(line); m != nil {
+			if s, err := strconv.Atoi(string(m[1])); err == nil {
+				sz = s
+			}
+			line = m[2]
+		}
+		lines, sizes = append(lines, string(line)), append(sizes, sz)
+	}
+	return lines, sizes
+}
+
+var sizeRE = regexp.MustCompile(`^\x00([0-9]+)\x00(.*)$`)
 
 func titleCase(name string) string {
 	var prev rune
@@ -499,13 +576,6 @@ func (v Variant) Type() string {
 func convColor(c colors.Color) color.Color {
 	clr := c.ToRGB()
 	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: 0xff}
-}
-
-var phrases = map[string]string{
-	"quick":    "The quick brown fox jumps over the lazy dog",
-	"liquor":   "Pack my box with five dozen liquor jugs",
-	"jackdaws": "Jackdaws love my big sphinx of quartz",
-	"wizards":  "The five boxing wizards jump quickly",
 }
 
 //go:embed text.tpl
