@@ -62,7 +62,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 				list && hasArgs,
 				match && !hasArgs,
 				!all && !list && !match && !hasArgs:
-				return errors.New("requires --all or one or more args, or --list, or --match and one or more args")
+				return errors.New("requires one or more args, or --all, --list, or --match with one or more args")
 			case all && list,
 				all && match,
 				match && list:
