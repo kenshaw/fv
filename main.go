@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -118,57 +119,32 @@ type Params struct {
 
 // do renders the specified font queries to w.
 func do(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
+	var fonts []*Font
+	// collect fonts
 	for i := 0; i < len(v.Args); i++ {
-		font, ff, err := openFont(sysfonts, v.Args[i], v.Style)
-		switch {
-		case font == nil || font.Family == "":
-			fmt.Fprintf(w, "error: arg %d: %v\n", i, err)
-		case err != nil:
-			fmt.Fprintf(w, "%s %q -- error: %v\n", font.Path, font.Family, err)
-		default:
-			if err := render(w, font, ff, v); err != nil {
-				return err
-			}
+		f, err := Open(sysfonts, v.Args[i], v.Style)
+		if err != nil {
+			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
 		}
-		nl := []byte{'\n'}
-		if i != len(v.Args)-1 && err == nil {
-			nl = append(nl, '\n')
-		}
-		w.Write(nl)
+		fonts = append(fonts, f...)
 	}
-	return nil
+	return render(w, fonts, v)
 }
 
 // doAll renders all system fonts to w.
 func doAll(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
 	families := maps.Keys(sysfonts.Fonts)
 	slices.Sort(families)
-	for i := 0; i < len(families); i++ {
-		styles := maps.Keys(sysfonts.Fonts[families[i]])
+	// collect fonts
+	var fonts []*Font
+	for _, family := range families {
+		styles := maps.Keys(sysfonts.Fonts[family])
 		slices.Sort(styles)
 		for _, style := range styles {
-			font := NewFont(sysfonts.Fonts[families[i]][style])
-			ff := canvas.NewFontFamily(font.Family)
-			if err := ff.LoadFontFile(font.Path, v.Style); err != nil {
-				fmt.Fprintf(w, "%s -- error: %v\n", font, err)
-				if i != len(families)-1 {
-					w.Write([]byte{'\n'})
-				}
-				continue
-			}
-			if err := render(w, font, ff, v); err != nil {
-				return err
-			}
-			nl := []byte{'\n'}
-			if i != len(families)-1 {
-				nl = append(nl, '\n')
-			}
-			if _, err := w.Write(nl); err != nil {
-				return err
-			}
+			fonts = append(fonts, NewFont(sysfonts.Fonts[family][style]))
 		}
 	}
-	return nil
+	return render(w, fonts, v)
 }
 
 func doList(w io.Writer, sysfonts *font.SystemFonts, _ Params) error {
@@ -196,7 +172,115 @@ func doMatch(w io.Writer, sysfonts *font.SystemFonts, v Params) error {
 	return nil
 }
 
-func render(w io.Writer, font *Font, ff *canvas.FontFamily, v Params) error {
+func render(w io.Writer, fonts []*Font, v Params) error {
+	for i := 0; i < len(fonts); i++ {
+		err := fonts[i].Render(w, v)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
+		}
+		nl := []byte{'\n'}
+		if i != len(v.Args)-1 && err == nil {
+			nl = append(nl, '\n')
+		}
+		w.Write(nl)
+	}
+	return nil
+}
+
+type Font struct {
+	Path   string
+	Family string
+	Face   string
+}
+
+func NewFont(md font.FontMetadata) *Font {
+	family := md.Family
+	if family == "" {
+		family = titleCase(strings.TrimSuffix(filepath.Base(md.Filename), filepath.Ext(md.Filename)))
+	}
+	return &Font{
+		Path:   md.Filename,
+		Family: family,
+		Face:   fmt.Sprintf("%s (%s)", family, md.Style),
+	}
+}
+
+func NewFontForPath(path string) *Font {
+	return &Font{
+		Path:   path,
+		Family: titleCase(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))),
+	}
+}
+
+func Match(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) *Font {
+	md, ok := sysfonts.Match(name, font.ParseStyle(style.String()))
+	if !ok {
+		return nil
+	}
+	return NewFont(md)
+}
+
+// Open opens fonts.
+func Open(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) ([]*Font, error) {
+	var v []*Font
+	switch fi, err := os.Stat(name); {
+	case err == nil && fi.IsDir():
+		entries, err := os.ReadDir(name)
+		if err != nil {
+			return nil, fmt.Errorf("unable to open directory %q: %v", name, err)
+		}
+		for _, entry := range entries {
+			if s := entry.Name(); !entry.IsDir() && extRE.MatchString(s) {
+				v = append(v, NewFontForPath(filepath.Join(name, s)))
+			}
+		}
+		sort.Slice(v, func(i, j int) bool {
+			return strings.ToLower(v[i].Family) < strings.ToLower(v[j].Family)
+		})
+	case err == nil:
+		v = append(v, NewFontForPath(name))
+	default:
+		if font := Match(sysfonts, name, style); font != nil {
+			v = append(v, font)
+		}
+	}
+	if len(v) == 0 {
+		return nil, fmt.Errorf("unable to locate font %q", name)
+	}
+	return v, nil
+}
+
+var extRE = regexp.MustCompile(`\.(ttf|ttc|otf|woff|woff2|sfnt)$`)
+
+func (font *Font) String() string {
+	name := font.Face
+	if name == "" {
+		name = font.Family
+	}
+	return fmt.Sprintf("%q: %s", name, font.Path)
+}
+
+func (font *Font) WriteYAML(w io.Writer) {
+	fmt.Fprintln(w, "---")
+	fmt.Fprintf(w, "path: %s\n", font.Path)
+	fmt.Fprintf(w, "family: %q\n", font.Family)
+	fmt.Fprintf(w, "face: %q\n", font.Face)
+}
+
+func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
+	ff := canvas.NewFontFamily(font.Family)
+	if err := ff.LoadFontFile(font.Path, style); err != nil {
+		return nil, err
+	}
+	return ff, nil
+}
+
+func (font *Font) Render(w io.Writer, v Params) error {
+	ff, err := font.Load(v.Style)
+	if err != nil {
+		return err
+	}
+
 	fmt.Fprintf(w, "%s\n", font)
 	// create canvas and context
 	c := canvas.New(100, 100)
@@ -226,68 +310,6 @@ func render(w io.Writer, font *Font, ff *canvas.FontFamily, v Params) error {
 	// rasterize canvas to image
 	img := rasterizer.Draw(c, canvas.DPI(float64(v.DPI)), canvas.DefaultColorSpace)
 	return sixel.NewEncoder(w).Encode(img)
-}
-
-// openFont opens the specified font.
-func openFont(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) (*Font, *canvas.FontFamily, error) {
-	var font *Font
-	switch {
-	case fileExists(name):
-		font = &Font{
-			Path:   name,
-			Family: titleCase(strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))),
-		}
-	default:
-		if font = Match(sysfonts, name, style); font == nil {
-			return nil, nil, fmt.Errorf("unable to match font %q", name)
-		}
-	}
-	ff := canvas.NewFontFamily(font.Family)
-	if err := ff.LoadFontFile(font.Path, style); err != nil {
-		return font, nil, err
-	}
-	return font, ff, nil
-}
-
-type Font struct {
-	Path   string
-	Family string
-	Face   string
-}
-
-func NewFont(md font.FontMetadata) *Font {
-	family := md.Family
-	if family == "" {
-		family = titleCase(strings.TrimSuffix(filepath.Base(md.Filename), filepath.Ext(md.Filename)))
-	}
-	return &Font{
-		Path:   md.Filename,
-		Family: family,
-		Face:   fmt.Sprintf("%s (%s)", family, md.Style),
-	}
-}
-
-func Match(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) *Font {
-	md, ok := sysfonts.Match(name, font.ParseStyle(style.String()))
-	if !ok {
-		return nil
-	}
-	return NewFont(md)
-}
-
-func (font *Font) String() string {
-	name := font.Face
-	if name == "" {
-		name = font.Family
-	}
-	return fmt.Sprintf("%q: %s", name, font.Path)
-}
-
-func (font *Font) WriteYAML(w io.Writer) {
-	fmt.Fprintln(w, "---")
-	fmt.Fprintf(w, "path: %s\n", font.Path)
-	fmt.Fprintf(w, "family: %q\n", font.Family)
-	fmt.Fprintf(w, "face: %q\n", font.Face)
 }
 
 func titleCase(name string) string {
@@ -433,16 +455,6 @@ func (v Variant) Type() string {
 func convColor(c colors.Color) color.Color {
 	clr := c.ToRGB()
 	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: 0xff}
-}
-
-func isDir(name string) bool {
-	fi, err := os.Stat(name)
-	return err == nil && fi.IsDir()
-}
-
-func fileExists(name string) bool {
-	fi, err := os.Stat(name)
-	return err == nil && !fi.IsDir()
 }
 
 var phrases = map[string]string{
