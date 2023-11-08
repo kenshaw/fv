@@ -244,10 +244,11 @@ func render(w io.Writer, fonts []*Font, v *Params) error {
 	return nil
 }
 
-type exec struct {
-	Size  int
-	Name  string
-	Style string
+type TemplateData struct {
+	Size       int
+	Name       string
+	Style      string
+	SampleText string
 }
 
 func renderer() (func(io.Writer, image.Image) error, string, bool) {
@@ -282,11 +283,12 @@ func palettize(src image.Image) *image.Paletted {
 }
 
 type Font struct {
-	Path   string
-	Family string
-	Name   string
-	Style  string
-	once   sync.Once
+	Path       string
+	Family     string
+	Name       string
+	Style      string
+	SampleText string
+	once       sync.Once
 }
 
 func NewFont(md fontpkg.FontMetadata) *Font {
@@ -383,6 +385,9 @@ func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
 		if v := face.Font.SFNT.Name.Get(fontpkg.NameFontSubfamily); 0 < len(v) {
 			font.Style = fontpkg.ParseStyle(v[0].String()).String()
 		}
+		if v := face.Font.SFNT.Name.Get(fontpkg.NameSampleText); 0 < len(v) {
+			font.SampleText = v[0].String()
+		}
 	})
 	return ff, nil
 }
@@ -396,10 +401,11 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 
 	// generate text
 	buf := new(bytes.Buffer)
-	if err := tpl.Execute(buf, exec{
-		Size:  v.Size,
-		Name:  font.BestName(),
-		Style: font.Style,
+	if err := tpl.Execute(buf, TemplateData{
+		Size:       v.Size,
+		Name:       font.BestName(),
+		Style:      font.Style,
+		SampleText: font.SampleText,
 	}); err != nil {
 		return err
 	}
