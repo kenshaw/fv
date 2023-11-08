@@ -339,7 +339,7 @@ func Open(sysfonts *font.SystemFonts, name string, style canvas.FontStyle) ([]*F
 	return v, nil
 }
 
-var extRE = regexp.MustCompile(`\.(ttf|ttc|otf|woff|woff2|sfnt)$`)
+var extRE = regexp.MustCompile(`(?i)\.(ttf|ttc|otf|woff|woff2|sfnt)$`)
 
 func (font *Font) String() string {
 	name := font.Face
