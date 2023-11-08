@@ -1,4 +1,5 @@
-// Command fv is a command-line font viewer tool.
+// Command fv is a command-line font viewer using terminal graphics (Sixel,
+// iTerm, Kitty).
 package main
 
 import (
@@ -54,7 +55,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 	var text string
 	c := &cobra.Command{
 		Use:     appName + " [flags] <font1> [font2, ..., fontN]",
-		Short:   appName + ", a font viewer tool",
+		Short:   appName + ", a command-line font viewer using terminal graphics",
 		Version: appVersion,
 		Args: func(_ *cobra.Command, args []string) error {
 			switch hasArgs := len(args) != 0; {

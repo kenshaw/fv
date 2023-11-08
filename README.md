@@ -1,11 +1,13 @@
-# About
+# fv
 
-Command `fv` is a command-line font viewer tool
+`fv` is a command-line font viewer using terminal graphics (Sixel, iTerm,
+Kitty).
 
 ## Usage
 
 ```sh
-fv, a font viewer tool
+$ fv --help
+fv, a command-line font viewer using terminal graphics
 
 Usage:
   fv [flags] <font1> [font2, ..., fontN]
