@@ -58,11 +58,14 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 		Version: appVersion,
 		Args: func(_ *cobra.Command, args []string) error {
 			switch hasArgs := len(args) != 0; {
-			case all && hasArgs,
-				list && hasArgs,
-				match && !hasArgs,
-				!all && !list && !match && !hasArgs:
-				return errors.New("requires one or more args, or --all, --list, or --match with one or more args")
+			case all && hasArgs:
+				return errors.New("--all does not take any args")
+			case list && hasArgs:
+				return errors.New("--list does not take any args")
+			case match && !hasArgs:
+				return errors.New("--match requires one or more args")
+			case !all && !list && !match && !hasArgs:
+				return errors.New("requires one or more args")
 			case all && list,
 				all && match,
 				match && list:
