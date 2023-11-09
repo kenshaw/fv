@@ -1,7 +1,7 @@
 name: Release
 on: push
 env:
-  APP_NAME: fv
+  APP: fv
   GO_VERSION: stable
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: dist-linux-${{ matrix.arch }}
-        path: build/linux/*/*/fv*.tar.bz2
+        path: build/linux/*/*/$APP*.tar.bz2
 
   build_for_macos:
     name: Build for macOS
@@ -63,12 +63,12 @@ jobs:
     - name: Build ${{ matrix.arch }}
       run: |
         ./build.sh -v ${{ github.ref_name }} -a ${{ matrix.arch }}
-        file build/darwin/*/*/$APP_NAME
+        file build/darwin/*/*/$APP
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-${{ matrix.arch }}
-        path: build/darwin/*/*/${APP_NAME}*.tar.bz2
+        path: build/darwin/*/*/$APP*.tar.bz2
 
   build_for_macos_universal:
     name: Build for macOS (universal)
@@ -80,23 +80,23 @@ jobs:
       uses: actions/download-artifact@v3
     - name: Build universal
       run: |
-        export WORKDIR=/tmp/${APP_NAME}-universal
+        export WORKDIR=/tmp/$APP-universal
         mkdir -p $WORKDIR
-        tar -jxvf dist-darwin-amd64/*/*/${APP_NAME}*.tar.bz2 -C $WORKDIR ${APP_NAME}
-        mv $WORKDIR/${APP_NAME} $WORKDIR/${APP_NAME}-amd64
-        tar -jxvf dist-darwin-arm64/*/*/${APP_NAME}*.tar.bz2 -C $WORKDIR ${APP_NAME}
-        mv $WORKDIR/${APP_NAME} $WORKDIR/${APP_NAME}-arm64
-        lipo -create -output $WORKDIR/${APP_NAME} $WORKDIR/${APP_NAME}-amd64 $WORKDIR/${APP_NAME}-arm64
-        $WORKDIR/${APP_NAME} --version
-        rm $WORKDIR/${APP_NAME}-{amd64,arm64}
-        tar -jxvf dist-darwin-amd64/*/*/${APP_NAME}*.tar.bz2 -C $WORKDIR LICENSE
-        tar -C $WORKDIR -cjf ${APP_NAME}-${GITHUB_REF_NAME#v}-darwin-universal.tar.bz2
-        ls -alh ${APP_NAME}*
+        tar -jxvf dist-darwin-amd64/*/*/$APP*.tar.bz2 -C $WORKDIR $APP
+        mv $WORKDIR/$APP $WORKDIR/$APP-amd64
+        tar -jxvf dist-darwin-arm64/*/*/$APP*.tar.bz2 -C $WORKDIR $APP
+        mv $WORKDIR/$APP $WORKDIR/$APP-arm64
+        lipo -create -output $WORKDIR/$APP $WORKDIR/$APP-amd64 $WORKDIR/$APP-arm64
+        $WORKDIR/$APP --version
+        rm $WORKDIR/$APP-{amd64,arm64}
+        tar -jxvf dist-darwin-amd64/*/*/$APP*.tar.bz2 -C $WORKDIR LICENSE
+        tar -C $WORKDIR -cjf $APP-${GITHUB_REF_NAME#v}-darwin-universal.tar.bz2
+        ls -alh $APP*
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-universal
-        path: ./${APP_NAME}*.tar.bz2
+        path: ./$APP*.tar.bz2
 
   build_for_windows:
     name: Build for Windows
@@ -117,7 +117,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: dist-windows
-        path: build/windows/*/*/${APP_NAME}*.zip
+        path: build/windows/*/*/$APP*.zip
 
   release:
     name: Draft Release
@@ -134,8 +134,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: ${APP_NAME} ${{ github.ref_name }}
+          name: $APP ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           generate_release_notes: true
-          files: dist-*/*/*/${APP_NAME}*.*
+          files: dist-*/*/*/$APP*.*

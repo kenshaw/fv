@@ -33,8 +33,8 @@ case "$opt" in
 esac
 done
 
-# neither -v or -r specified, set FORCE and VER
-if [ "$VER" = "" ]; then
+# neither -v or -r specified, or -v=master, set FORCE and VER
+if [[ "$VER" = "" || "$VER" == "master" ]]; then
   VER=0.0.0-dev
   FORCE=1
 fi
