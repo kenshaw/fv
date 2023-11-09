@@ -97,10 +97,12 @@ jobs:
         tar -jxvf dist-darwin-arm64/*/*/*.tar.bz2 -C $WORKDIR $APP
         mv $WORKDIR/$APP $WORKDIR/$APP-arm64
 
+        file $WORKDIR/$APP-{amd64,arm64}
+
         lipo -create -output $WORKDIR/$APP $WORKDIR/$APP-amd64 $WORKDIR/$APP-arm64
-        file build/darwin/*/*/$APP
         $WORKDIR/$APP --version
         rm $WORKDIR/$APP-{amd64,arm64}
+        file $WORKDIR/$APP
 
         tar -C $WORKDIR -cjf $WORKDIR/$APP-${VER#v}-darwin-universal.tar.bz2
         ls -alh $WORKDIR/*.tar.bz2
