@@ -62,7 +62,7 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
     - name: Build ${{ matrix.arch }}
       run: |
-        ./build-release.sh -v ${{ github.ref_name }} -a ${{ matrix.arch }}
+        ./build.sh -v ${{ github.ref_name }} -a ${{ matrix.arch }}
         file build/darwin/*/*/$APP_NAME
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
@@ -112,7 +112,7 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
     - name: Build amd64
       shell: bash
-      run: ./build-release.sh -v ${{ github.ref_name }}
+      run: ./build.sh -v ${{ github.ref_name }}
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
       with:
