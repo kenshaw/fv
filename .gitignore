@@ -1,6 +1,8 @@
 /fv
 /fv.exe
 
+/build
+
 *.png
 
 *.ttf
