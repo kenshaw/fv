@@ -43,7 +43,8 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: dist-linux-${{ matrix.arch }}
-        path: build/linux/*/*/$APP*.tar.bz2
+        path: build/linux/**/*.tar.bz2
+        if-no-files-found: error
 
   build_for_macos:
     name: Build for macOS
@@ -68,7 +69,8 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-${{ matrix.arch }}
-        path: build/darwin/*/*/$APP*.tar.bz2
+        path: build/darwin/**/*.tar.bz2
+        if-no-files-found: error
 
   build_for_macos_universal:
     name: Build for macOS (universal)
@@ -82,21 +84,22 @@ jobs:
       run: |
         export WORKDIR=/tmp/$APP-universal
         mkdir -p $WORKDIR
-        tar -jxvf dist-darwin-amd64/*/*/$APP*.tar.bz2 -C $WORKDIR $APP
+        tar -jxvf dist-darwin-amd64/*/*/*.tar.bz2 -C $WORKDIR $APP
         mv $WORKDIR/$APP $WORKDIR/$APP-amd64
-        tar -jxvf dist-darwin-arm64/*/*/$APP*.tar.bz2 -C $WORKDIR $APP
+        tar -jxvf dist-darwin-arm64/*/*/*.tar.bz2 -C $WORKDIR $APP
         mv $WORKDIR/$APP $WORKDIR/$APP-arm64
         lipo -create -output $WORKDIR/$APP $WORKDIR/$APP-amd64 $WORKDIR/$APP-arm64
         $WORKDIR/$APP --version
         rm $WORKDIR/$APP-{amd64,arm64}
-        tar -jxvf dist-darwin-amd64/*/*/$APP*.tar.bz2 -C $WORKDIR LICENSE
+        tar -jxvf dist-darwin-amd64/*/*/*.tar.bz2 -C $WORKDIR LICENSE
         tar -C $WORKDIR -cjf $APP-${GITHUB_REF_NAME#v}-darwin-universal.tar.bz2
         ls -alh $APP*
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-universal
-        path: ./$APP*.tar.bz2
+        path: ./*.tar.bz2
+        if-no-files-found: error
 
 #  build_for_windows:
 #    name: Build for Windows
@@ -117,7 +120,8 @@ jobs:
 #      uses: actions/upload-artifact@v3
 #      with:
 #        name: dist-windows
-#        path: build/windows/*/*/$APP*.zip
+#        path: build/windows/**/*.zip
+#        if-no-files-found: error
 
   release:
     name: Draft Release
