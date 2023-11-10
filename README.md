@@ -7,8 +7,15 @@ Kitty).
   <a href="#installing" title="Installing">Installing</a> |
   <a href="#building" title="Building">Building</a> |
   <a href="#using" title="Using">Using</a> |
-  <a href="https://github.com/kenshaw/fv/releases" title="Releases">Releases</a> |
+  <a href="https://github.com/kenshaw/fv/releases" title="Releases">Releases</a>
 </p>
+
+[![Releases][release-status]][Releases]
+[![Discord Discussion][discord-status]][discord]
+
+[release-status]: https://img.shields.io/github/v/release/xo/usql?display_name=tag&sort=semver "Latest Release"
+[discord]: https://discord.gg/WDWAgXwJqN "Discord Discussion"
+[discord-status]: https://img.shields.io/discord/829150509658013727.svg?label=Discord&logo=Discord&colorB=7289da&style=flat-square "Discord Discussion"
 
 ## Installing
 
