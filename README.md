@@ -13,6 +13,7 @@ Kitty).
 [![Releases][release-status]][Releases]
 [![Discord Discussion][discord-status]][discord]
 
+[releases]: https://github.com/kenshaw/fv/releases "Releases"
 [release-status]: https://img.shields.io/github/v/release/xo/usql?display_name=tag&sort=semver "Latest Release"
 [discord]: https://discord.gg/WDWAgXwJqN "Discord Discussion"
 [discord-status]: https://img.shields.io/discord/829150509658013727.svg?label=Discord&logo=Discord&colorB=7289da&style=flat-square "Discord Discussion"
@@ -52,14 +53,14 @@ command][yay]:
 
 ```sh
 # install
-$ yay -S fv
+$ yay -S fv-cli
 ```
 
 Alternately, build and [install using `makepkg`][arch-makepkg]:
 
 ```sh
 # clone package repo and make/install package
-$ git clone https://aur.archlinux.org/fv.git && cd fv
+$ git clone https://aur.archlinux.org/fv-cli.git && cd fv-cli
 $ makepkg -si
 ==> Making package: fv 0.12.10-1 (Fri 26 Aug 2022 05:56:09 AM WIB)
 ==> Checking runtime dependencies...
@@ -93,7 +94,7 @@ Install `fv` in the usual Go fashion:
 $ go install github.com/kenshaw/fv@latest
 ```
 
-## Usage
+## Using
 
 ```sh
 $ fv --help
@@ -117,3 +118,8 @@ Flags:
       --variant font-variant   font variant (default normal)
   -v, --version                version for fv
 ```
+
+[fv-tap]: https://github.com/kenshaw/homebrew-fv
+[aur]: https://aur.archlinux.org/packages/fv-cli
+[arch-makepkg]: https://wiki.archlinux.org/title/makepkg
+[yay]: https://github.com/Jguer/yay
