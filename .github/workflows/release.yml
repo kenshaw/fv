@@ -100,11 +100,11 @@ jobs:
         file $WORKDIR/$APP-{amd64,arm64}
 
         lipo -create -output $WORKDIR/$APP $WORKDIR/$APP-amd64 $WORKDIR/$APP-arm64
-        $WORKDIR/$APP --version
-        rm $WORKDIR/$APP-{amd64,arm64}
         file $WORKDIR/$APP
 
-        tar -C $WORKDIR -cjf $WORKDIR/$APP-${VER#v}-darwin-universal.tar.bz2
+        rm $WORKDIR/$APP-{amd64,arm64}
+
+        tar -C $WORKDIR -cjf $WORKDIR/$APP-${VER#v}-darwin-universal.tar.bz2 $APP LICENSE
         ls -alh $WORKDIR/*.tar.bz2
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
