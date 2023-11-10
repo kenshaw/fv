@@ -9,13 +9,14 @@ BUILD=$SRC/build
 STATIC=0
 FORCE=0
 CHECK=1
+INSTALL=0
 VERBOSE=false
 PLATFORM=$(go env GOOS)
 ARCH=$(go env GOARCH)
 GOARCH=$ARCH
 
 OPTIND=1
-while getopts "a:b:v:sfrnx" opt; do
+while getopts "a:b:v:sfrnxi" opt; do
 case "$opt" in
   a) ARCH=$OPTARG ;;
   b) BUILD=$OPTARG ;;
@@ -29,6 +30,7 @@ case "$opt" in
     VER=$(git tag -l|grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'|sort -r -V|head -1||:)
     popd &> /dev/null
   ;;
+  i) INSTALL=1 ;;
   x) VERBOSE=true ;;
 esac
 done
@@ -156,19 +158,28 @@ echo "BUILDING:    $BIN"
 # build
 echo "BUILD:"
 
+VERB=build
+OUTPUT="-o $BIN"
+if [ "$INSTALL" = "1" ]; then
+  VERB=install OUTPUT=""
+fi
 (set -x;
   CC=$CC \
   CXX=$CXX \
   CGO_ENABLED=1 \
   GOARCH=$ARCH \
-  go build \
+  go $VERB \
     -v=$VERBOSE \
     -x=$VERBOSE \
     -ldflags="$LDFLAGS" \
     -tags="$TAGS" \
     -trimpath \
-    -o $BIN
+    $OUTPUT
 ) 2>&1 | log '    '
+
+if [ "$INSTALL" = "1" ]; then
+  exit
+fi
 
 built_ver() {
   if [[ "$PLATFORM" == "linux" && "$ARCH" != "$GOARCH" ]]; then
