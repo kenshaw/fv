@@ -14,7 +14,7 @@ Kitty).
 [![Discord Discussion][discord-status]][discord]
 
 [releases]: https://github.com/kenshaw/fv/releases "Releases"
-[release-status]: https://img.shields.io/github/v/release/xo/usql?display_name=tag&sort=semver "Latest Release"
+[release-status]: https://img.shields.io/github/v/release/kenshaw/fv?display_name=tag&sort=semver "Latest Release"
 [discord]: https://discord.gg/WDWAgXwJqN "Discord Discussion"
 [discord-status]: https://img.shields.io/discord/829150509658013727.svg?label=Discord&logo=Discord&colorB=7289da&style=flat-square "Discord Discussion"
 
