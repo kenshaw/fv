@@ -18,6 +18,24 @@ Kitty).
 [discord]: https://discord.gg/WDWAgXwJqN "Discord Discussion"
 [discord-status]: https://img.shields.io/discord/829150509658013727.svg?label=Discord&logo=Discord&colorB=7289da&style=flat-square "Discord Discussion"
 
+## Overview
+
+`fv` quick previews of TTF (and other font files) directly from the
+command-line:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kenshaw/fv-images/master/example.png">
+</p>
+
+Uses [Sixel][sixel], [iTerm Inline Images][iterm], or [Kitty][kitty] graphics
+protocols where available. See [Are We Sixel Yet?][arewesixelyet] for a list of
+terminals known to work with this package.
+
+[sixel]: https://saitoha.github.io/libsixel/
+[iterm]: https://iterm2.com/documentation-images.html
+[kitty]: https://sw.kovidgoyal.net/kitty/graphics-protocol/
+[arewesixelyet]: https://www.arewesixelyet.com
+
 ## Installing
 
 `fv` can be installed [via Release][], [via Homebrew][], [via AUR][], [via
@@ -97,6 +115,25 @@ $ go install github.com/kenshaw/fv@latest
 ## Using
 
 ```sh
+# list all system fonts
+$ fv --list
+
+# display all system fonts
+$ fv --all
+
+# display Verdana bold, italic
+$ fv Verdana --style 'bold italic'
+
+# display match information for a font
+$ fv --match 'Hack'
+
+# change the text display with the font
+$ fv Arial --text "hello world"
+
+# display a specific font file with custom text
+$ fv /path/to/MyFont.woff2 --text "Cool Company Name"
+
+# all command line options
 $ fv --help
 fv, a command-line font viewer using terminal graphics
 
@@ -119,6 +156,7 @@ Flags:
   -v, --version                version for fv
 ```
 
+[homebrew]: https://brew.sh/
 [fv-tap]: https://github.com/kenshaw/homebrew-fv
 [aur]: https://aur.archlinux.org/packages/fv-cli
 [arch-makepkg]: https://wiki.archlinux.org/title/makepkg
