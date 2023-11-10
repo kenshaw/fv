@@ -4,6 +4,7 @@ set -e
 
 SRC=$(realpath $(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd))
 
+NAME=$(basename $SRC)
 VER=
 BUILD=$SRC/build
 STATIC=0
@@ -15,8 +16,11 @@ PLATFORM=$(go env GOOS)
 ARCH=$(go env GOARCH)
 GOARCH=$ARCH
 
+TAGS=(
+)
+
 OPTIND=1
-while getopts "a:b:v:sfrnxi" opt; do
+while getopts "a:b:v:sfnrixt:" opt; do
 case "$opt" in
   a) ARCH=$OPTARG ;;
   b) BUILD=$OPTARG ;;
@@ -32,6 +36,7 @@ case "$opt" in
   ;;
   i) INSTALL=1 ;;
   x) VERBOSE=true ;;
+  t) TAGS=($OPTARG) ;;
 esac
 done
 
@@ -41,18 +46,12 @@ if [[ "$VER" = "" || "$VER" == "master" ]]; then
   FORCE=1
 fi
 
-NAME=$(basename $SRC)
 VER="${VER#v}"
 EXT=tar.bz2
 DIR=$BUILD/$PLATFORM/$ARCH/$VER
 BIN=$DIR/$NAME
 
-TAGS=(
-)
 case $PLATFORM in
-  darwin|linux)
-    TAGS+=()
-  ;;
   windows)
     EXT=zip
     BIN=$BIN.exe
@@ -125,7 +124,7 @@ if [ "$STATIC" = "1" ]; then
 fi
 
 # check not overwriting existing build artifacts
-if [[ -e $OUT && "$FORCE" != "1" ]]; then
+if [[ -e $OUT && "$FORCE" != "1" && "$INSTALL" == "0" ]]; then
   echo "ERROR: $OUT exists and FORCE != 1 (try $0 -f)"
   exit 1
 fi
@@ -175,7 +174,7 @@ fi
     -tags="$TAGS" \
     -trimpath \
     $OUTPUT
-) 2>&1 | log '    '
+) 2>&1 | log '  '
 
 if [ "$INSTALL" = "1" ]; then
   exit
