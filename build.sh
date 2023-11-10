@@ -6,12 +6,12 @@ SRC=$(realpath $(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd))
 
 NAME=$(basename $SRC)
 VER=
-BUILD=$SRC/build
 STATIC=0
 FORCE=0
 CHECK=1
 INSTALL=0
 VERBOSE=false
+CGO_ENABLED=1
 PLATFORM=$(go env GOOS)
 ARCH=$(go env GOARCH)
 GOARCH=$ARCH
@@ -19,24 +19,25 @@ GOARCH=$ARCH
 TAGS=(
 )
 
+latest_tag() {
+  # get latest tag version
+  pushd $SRC &> /dev/null
+  git tag -l|grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'|sort -r -V|head -1||:
+  popd &> /dev/null
+}
+
 OPTIND=1
-while getopts "a:b:v:sfnrixt:" opt; do
+while getopts "a:v:sfnixt:r" opt; do
 case "$opt" in
   a) ARCH=$OPTARG ;;
-  b) BUILD=$OPTARG ;;
   v) VER=$OPTARG ;;
   s) STATIC=1 ;;
   f) FORCE=1 ;;
   n) CHECK=0 ;;
-  r)
-    # get latest tag version
-    pushd $SRC &> /dev/null
-    VER=$(git tag -l|grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'|sort -r -V|head -1||:)
-    popd &> /dev/null
-  ;;
   i) INSTALL=1 ;;
   x) VERBOSE=true ;;
   t) TAGS=($OPTARG) ;;
+  r) VER=$(latest_tag) ;;
 esac
 done
 
@@ -47,8 +48,11 @@ if [[ "$VER" = "" || "$VER" == "master" ]]; then
 fi
 
 VER="${VER#v}"
-EXT=tar.bz2
+
+BUILD=$SRC/build
 DIR=$BUILD/$PLATFORM/$ARCH/$VER
+
+EXT=tar.bz2
 BIN=$DIR/$NAME
 
 case $PLATFORM in
@@ -165,7 +169,7 @@ fi
 (set -x;
   CC=$CC \
   CXX=$CXX \
-  CGO_ENABLED=1 \
+  CGO_ENABLED=$CGO_ENABLED \
   GOARCH=$ARCH \
   go $VERB \
     -v=$VERBOSE \
