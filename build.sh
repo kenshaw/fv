@@ -9,6 +9,7 @@ VER=
 STATIC=0
 FORCE=0
 CHECK=1
+BUILDONLY=0
 INSTALL=0
 VERBOSE=false
 CGO_ENABLED=1
@@ -29,7 +30,7 @@ latest_tag() {
 }
 
 OPTIND=1
-while getopts "a:v:sfnixt:r" opt; do
+while getopts "a:v:sfnibxt:r" opt; do
 case "$opt" in
   a) ARCH=$OPTARG ;;
   v) VER=$OPTARG ;;
@@ -37,6 +38,7 @@ case "$opt" in
   f) FORCE=1 ;;
   n) CHECK=0 ;;
   i) INSTALL=1 ;;
+  b) BUILDONLY=1 ;;
   x) VERBOSE=true ;;
   t) TAGS=($OPTARG) ;;
   r) VER=$(latest_tag) ;;
@@ -167,6 +169,8 @@ VERB=build
 OUTPUT="-o $BIN"
 if [ "$INSTALL" = "1" ]; then
   VERB=install OUTPUT=""
+elif [ "$BUILDONLY" = "1" ]; then
+  OUTPUT=""
 fi
 (set -x;
   CC=$CC \
@@ -182,7 +186,7 @@ fi
     $OUTPUT
 ) 2>&1 | log '  '
 
-if [ "$INSTALL" = "1" ]; then
+if [[ "$INSTALL" == "1" || "$BUILDONLY" == "1" ]]; then
   exit
 fi
 
