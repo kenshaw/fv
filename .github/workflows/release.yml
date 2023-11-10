@@ -151,8 +151,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: $APP $VER
-          token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           generate_release_notes: true
           files: |
             dist-*/*/*/*.bz2
+            dist-*/*/*/*.zip
