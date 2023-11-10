@@ -12,6 +12,8 @@ CHECK=1
 INSTALL=0
 VERBOSE=false
 CGO_ENABLED=1
+LDNAME=main.name
+LDVERSION=main.version
 PLATFORM=$(go env GOOS)
 ARCH=$(go env GOARCH)
 GOARCH=$ARCH
@@ -95,8 +97,8 @@ fi
 LDFLAGS=(
   -s
   -w
-  -X main.name=$NAME
-  -X main.version=$VER
+  -X $LDNAME=$NAME
+  -X $LDVERSION=$VER
 )
 
 if [ "$STATIC" = "1" ]; then
