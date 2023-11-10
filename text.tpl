@@ -1,6 +1,5 @@
 {{ size (inc .Size 2) }}{{ .Name }}, {{ .Style }}
-{{ size .Size }}{{ if .SampleText }}
-{{ .SampleText }}{{ else }}abcdefghijklmnopqrstuvwxyz
+{{ size .Size }}{{ if .SampleText }}{{ .SampleText }}{{ else }}abcdefghijklmnopqrstuvwxyz
 ABCDEFGHIJKLMNOPQRSTUVWXYZ
 0123456789.<:,>;('~"){!@#$%^&*?`=}[_\-/+]
 The quick brown fox jumps over the lazy dog.
