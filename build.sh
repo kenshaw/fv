@@ -140,12 +140,6 @@ fi
 TAGS="${TAGS[@]}"
 LDFLAGS="${LDFLAGS[@]}"
 
-log() {
-  cat - | while read -r message; do
-    echo "$1$message"
-  done
-}
-
 echo "APP:         $NAME/${VER} ($PLATFORM/$ARCH)"
 if [ "$STATIC" = "1" ]; then
   echo "STATIC:      yes"
@@ -184,7 +178,7 @@ fi
     -tags="$TAGS" \
     -trimpath \
     $OUTPUT
-) 2>&1 | log '  '
+)
 
 if [[ "$INSTALL" == "1" || "$BUILDONLY" == "1" ]]; then
   exit
@@ -230,9 +224,13 @@ esac
 
 # report
 echo "PACKED:      $OUT ($(du -sh $OUT|awk '{print $1}'))"
+
 case $EXT in
   tar.bz2) tar -jvtf $OUT ;;
   zip)     unzip -l  $OUT ;;
 esac
+
+echo "SHA256SUM:"
+sha256sum $DIR/*
 
 popd &> /dev/null
