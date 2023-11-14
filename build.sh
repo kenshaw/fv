@@ -190,6 +190,22 @@ if [[ "$INSTALL" == "1" || "$BUILDONLY" == "1" ]]; then
   exit
 fi
 
+(set -x;
+  file $BIN
+)
+if [[ "$PLATFORM" != "windows" ]]; then
+  (set -x;
+    chmod +x $BIN
+  )
+fi
+
+# purge disk cache
+if [[ "$PLATFORM" == "darwin" && "$CI" == "true" ]]; then
+  (set -x;
+    sudo /usr/sbin/purge
+  )
+fi
+
 built_ver() {
   if [[ "$PLATFORM" == "linux" && "$ARCH" != "$GOARCH" ]]; then
     EXTRA=
@@ -215,17 +231,6 @@ if [[ "$CHECK" == "1" ]]; then
     exit 1
   fi
   echo "REPORTED:    $BUILT_VER"
-fi
-
-(set -x;
-  file $BIN
-)
-
-# purge disk cache
-if [[ "$PLATFORM" == "darwin" && "$CI" == "true" ]]; then
-  (set -x;
-    sudo /usr/sbin/purge
-  )
 fi
 
 # pack
