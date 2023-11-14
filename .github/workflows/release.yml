@@ -48,7 +48,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: dist-linux-${{ matrix.arch }}
-        path: build/linux/**/*.tar.bz2
+        path: build/linux/**/*
         if-no-files-found: error
 
   build_for_macos:
@@ -74,7 +74,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-${{ matrix.arch }}
-        path: build/darwin/**/*.tar.bz2
+        path: build/darwin/**/*
         if-no-files-found: error
 
   build_for_macos_universal:
@@ -105,12 +105,13 @@ jobs:
         rm $WORKDIR/$APP-{amd64,arm64}
 
         tar -C $WORKDIR -cjf $WORKDIR/$APP-${VER#v}-darwin-universal.tar.bz2 $APP LICENSE
-        ls -alh $WORKDIR/*.tar.bz2
+        ls -alh $WORKDIR/*
+        sha256sum $WORKDIR/*
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist-darwin-universal
-        path: build/darwin/**/*.tar.bz2
+        path: build/darwin/**/*
         if-no-files-found: error
 
 #  build_for_windows:
@@ -132,7 +133,7 @@ jobs:
 #      uses: actions/upload-artifact@v3
 #      with:
 #        name: dist-windows
-#        path: build/windows/**/*.zip
+#        path: build/windows/**/*
 #        if-no-files-found: error
 
   release:
