@@ -66,9 +66,7 @@ case $PLATFORM in
     BIN=$BIN.exe
   ;;
   darwin)
-    if [ ! -z "$(which gtar|:)" ]; then
-      TAR=gtar
-    fi
+    TAR=gtar
   ;;
 esac
 OUT=$DIR/$NAME-$VER-$PLATFORM-$ARCH.$EXT
