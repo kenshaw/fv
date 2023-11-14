@@ -119,7 +119,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 	c.Flags().IntVar(&dpi, "dpi", 100, "dpi")
 	c.Flags().Var(NewStyle(&style), "style", "font style")
 	c.Flags().Var(NewVariant(&variant), "variant", "font variant")
-	c.Flags().StringVar(&text, "text", "", "text")
+	c.Flags().StringVar(&text, "text", "", "display text")
 	c.SetVersionTemplate("{{ .Name }} {{ .Version }}\n")
 	c.InitDefaultHelpCmd()
 	c.SetArgs(cliargs[1:])

@@ -150,7 +150,7 @@ Flags:
       --match                  match system fonts
       --size int               font size (default 48)
       --style font-style       font style (default regular)
-      --text string            text
+      --text string            display text
       --variant font-variant   font variant (default normal)
   -v, --version                version for fv
 ```
