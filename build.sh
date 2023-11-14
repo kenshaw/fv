@@ -56,6 +56,7 @@ VER="${VER#v}"
 BUILD=$SRC/build
 DIR=$BUILD/$PLATFORM/$ARCH/$VER
 
+TAR=tar
 EXT=tar.bz2
 BIN=$DIR/$NAME
 
@@ -63,6 +64,11 @@ case $PLATFORM in
   windows)
     EXT=zip
     BIN=$BIN.exe
+  ;;
+  darwin)
+    if [ ! -z "$(which gtar|:)" ]; then
+      TAR=gtar
+    fi
   ;;
 esac
 OUT=$DIR/$NAME-$VER-$PLATFORM-$ARCH.$EXT
@@ -211,26 +217,34 @@ if [[ "$CHECK" == "1" ]]; then
   echo "REPORTED:    $BUILT_VER"
 fi
 
+(set -x;
+  file $BIN
+)
+
+# purge disk cache
+if [[ "$PLATFORM" == "darwin" && "$CI" == "true" ]]; then
+  (set -x;
+    sudo /usr/sbin/purge
+  )
+fi
+
 # pack
 cp $SRC/LICENSE $DIR
 case $EXT in
-  tar.bz2)
-    tar -C $DIR -cjf $OUT $(basename $BIN) LICENSE
-  ;;
-  zip)
-    zip $OUT -j $BIN LICENSE
-  ;;
+  tar.bz2) $TAR -C $DIR -cjf $OUT $(basename $BIN) LICENSE ;;
+  zip) zip $OUT -j $BIN LICENSE ;;
 esac
 
 # report
 echo "PACKED:      $OUT ($(du -sh $OUT|awk '{print $1}'))"
 
 case $EXT in
-  tar.bz2) tar -jvtf $OUT ;;
-  zip)     unzip -l  $OUT ;;
+  tar.bz2) (set -x; $TAR  -jvtf $OUT) ;;
+  zip)     (set -x; unzip -l    $OUT) ;;
 esac
 
-echo "SHA256SUM:"
-sha256sum $DIR/*
+(set -x;
+  sha256sum $DIR/*
+)
 
 popd &> /dev/null
