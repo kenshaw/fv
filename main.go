@@ -8,10 +8,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"image"
 	"image/color"
-	"image/color/palette"
-	"image/draw"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,7 +21,7 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/BourgeoisBear/rasterm"
+	"github.com/kenshaw/rasterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tdewolff/canvas"
@@ -89,14 +86,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			case match:
 				f = doMatch
 			}
-			var r func(io.Writer, image.Image) error
-			var typ string
-			if all || !(match || list) {
-				r, typ, _ = renderer()
-			}
 			return f(os.Stdout, sysfonts, &Params{
-				Render:  r,
-				Type:    typ,
 				FG:      fgColor,
 				BG:      bgColor,
 				Size:    size,
@@ -128,8 +118,6 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 }
 
 type Params struct {
-	Render  func(io.Writer, image.Image) error
-	Type    string
 	FG      color.Color
 	BG      color.Color
 	Size    int
@@ -170,8 +158,8 @@ func (v *Params) Template() (*template.Template, error) {
 
 // do renders the specified font queries to w.
 func do(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
-	if v.Render == nil || v.Type == "" {
-		return errors.New("terminal does not support graphics")
+	if !rasterm.Available() {
+		return rasterm.ErrTermGraphicsNotAvailable
 	}
 	var fonts []*Font
 	// collect fonts
@@ -187,8 +175,8 @@ func do(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
 
 // doAll renders all system fonts to w.
 func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
-	if v.Render == nil || v.Type == "" {
-		return errors.New("terminal does not support graphics")
+	if !rasterm.Available() {
+		return rasterm.ErrTermGraphicsNotAvailable
 	}
 	families := maps.Keys(sysfonts.Fonts)
 	slices.Sort(families)
@@ -235,15 +223,12 @@ func render(w io.Writer, fonts []*Font, v *Params) error {
 		return err
 	}
 	for i := 0; i < len(fonts); i++ {
-		err := fonts[i].Render(w, tpl, v)
-		if err != nil {
+		if err := fonts[i].Render(w, tpl, v); err != nil {
 			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
 		}
-		nl := []byte{'\n'}
-		if i != len(v.Args)-1 && err == nil {
-			nl = append(nl, '\n')
+		if i != len(fonts)-1 {
+			fmt.Fprintln(w)
 		}
-		w.Write(nl)
 	}
 	return nil
 }
@@ -253,31 +238,6 @@ type TemplateData struct {
 	Name       string
 	Style      string
 	SampleText string
-}
-
-func renderer() (func(io.Writer, image.Image) error, string, bool) {
-	var s rasterm.Settings
-	switch {
-	case rasterm.IsTmuxScreen():
-		return nil, "", false
-	case rasterm.IsTermKitty():
-		return s.KittyWriteImage, "kitty", true
-	case rasterm.IsTermItermWez():
-		return s.ItermWriteImage, "iterm", true
-	default:
-		if ok, _ := rasterm.IsSixelCapable(); ok {
-			return func(w io.Writer, src image.Image) error {
-				if _, ok := src.(*image.Paletted); !ok {
-					b := src.Bounds()
-					img := image.NewPaletted(b, palette.Plan9)
-					draw.FloydSteinberg.Draw(img, b, src, image.Point{})
-					src = img
-				}
-				return s.SixelWriteImage(w, src.(*image.Paletted))
-			}, "sixel", true
-		}
-	}
-	return nil, "", false
 }
 
 type Font struct {
@@ -438,8 +398,8 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 
 	ctx.Close()
 
-	// rasterize canvas
-	return v.Render(w, rasterizer.Draw(
+	// encode
+	return rasterm.Encode(w, rasterizer.Draw(
 		c,
 		canvas.DPI(float64(v.DPI)),
 		canvas.DefaultColorSpace),
