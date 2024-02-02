@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -45,7 +46,7 @@ func main() {
 
 func run(ctx context.Context, appName, appVersion string, cliargs []string) error {
 	var all, list, match bool
-	var fg colors.Color = colors.FromStdColor(color.RGBA{R: 0, G: 0, B: 0})
+	var fg colors.Color = colors.FromStdColor(color.Black)
 	var bg colors.Color = colors.FromStdColor(color.RGBA{R: 255, G: 255, B: 255})
 	var size, margin, dpi int
 	style, variant := canvas.FontRegular, canvas.FontNormal
@@ -164,11 +165,11 @@ func do(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
 	var fonts []*Font
 	// collect fonts
 	for i := 0; i < len(v.Args); i++ {
-		f, err := Open(sysfonts, v.Args[i], v.Style)
+		v, err := Open(sysfonts, v.Args[i], v.Style)
 		if err != nil {
 			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
 		}
-		fonts = append(fonts, f...)
+		fonts = append(fonts, v...)
 	}
 	return render(w, fonts, v)
 }
@@ -351,7 +352,7 @@ func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
 }
 
 func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
-	// load font
+	// load font family
 	ff, err := font.Load(v.Style)
 	if err != nil {
 		return err
@@ -468,9 +469,12 @@ func (c Color) String() string {
 }
 
 func (c Color) Set(s string) error {
-	var err error
-	*c.c, err = colors.Parse(s)
-	return err
+	clr, err := colors.Parse(s)
+	if err != nil {
+		return colors.ErrBadColor
+	}
+	*c.c = clr
+	return nil
 }
 
 func (c Color) Type() string {
@@ -565,8 +569,8 @@ func (v Variant) Type() string {
 }
 
 func convColor(c colors.Color) color.Color {
-	clr := c.ToRGB()
-	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: 0xff}
+	clr := c.ToRGBA()
+	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: uint8(math.Round(255 * clr.A))}
 }
 
 //go:embed text.tpl

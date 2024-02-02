@@ -1,9 +1,9 @@
 module github.com/kenshaw/fv
 
-go 1.21.3
+go 1.20
 
 require (
-	github.com/kenshaw/rasterm v0.1.8
+	github.com/kenshaw/rasterm v0.1.9
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/tdewolff/canvas v0.0.0-20240115005846-3d69968abe72
