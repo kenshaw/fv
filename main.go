@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"image/color"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +21,7 @@ import (
 	"text/template"
 	"unicode"
 
+	"github.com/kenshaw/colors"
 	"github.com/kenshaw/rasterm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -29,7 +29,6 @@ import (
 	fontpkg "github.com/tdewolff/canvas/font"
 	"github.com/tdewolff/canvas/renderers/rasterizer"
 	"golang.org/x/exp/maps"
-	"gopkg.in/go-playground/colors.v1"
 )
 
 var (
@@ -46,8 +45,7 @@ func main() {
 
 func run(ctx context.Context, appName, appVersion string, cliargs []string) error {
 	var all, list, match bool
-	var fg colors.Color = colors.FromStdColor(color.Black)
-	var bg colors.Color = colors.FromStdColor(color.RGBA{R: 255, G: 255, B: 255})
+	fg, bg := colors.FromColor(color.Black), colors.FromColor(color.White)
 	var size, margin, dpi int
 	style, variant := canvas.FontRegular, canvas.FontNormal
 	var text string
@@ -77,7 +75,6 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			if err != nil {
 				return err
 			}
-			fgColor, bgColor := convColor(fg), convColor(bg)
 			f := do
 			switch {
 			case all:
@@ -88,8 +85,8 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 				f = doMatch
 			}
 			return f(os.Stdout, sysfonts, &Params{
-				FG:      fgColor,
-				BG:      bgColor,
+				FG:      fg,
+				BG:      bg,
 				Size:    size,
 				DPI:     dpi,
 				Margin:  margin,
@@ -103,8 +100,8 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 	c.Flags().BoolVar(&all, "all", false, "show all system fonts")
 	c.Flags().BoolVar(&list, "list", false, "list system fonts")
 	c.Flags().BoolVar(&match, "match", false, "match system fonts")
-	c.Flags().Var(NewColor(&fg), "fg", "foreground color")
-	c.Flags().Var(NewColor(&bg), "bg", "background color")
+	c.Flags().Var(fg.Pflag(), "fg", "foreground color")
+	c.Flags().Var(bg.Pflag(), "bg", "background color")
 	c.Flags().IntVar(&size, "size", 48, "font size")
 	c.Flags().IntVar(&margin, "margin", 5, "margin")
 	c.Flags().IntVar(&dpi, "dpi", 100, "dpi")
@@ -454,33 +451,6 @@ func peek(r []rune, i int) rune {
 	return 0
 }
 
-type Color struct {
-	c *colors.Color
-}
-
-func NewColor(c *colors.Color) pflag.Value {
-	return Color{
-		c: c,
-	}
-}
-
-func (c Color) String() string {
-	return (*c.c).String()
-}
-
-func (c Color) Set(s string) error {
-	clr, err := colors.Parse(s)
-	if err != nil {
-		return colors.ErrBadColor
-	}
-	*c.c = clr
-	return nil
-}
-
-func (c Color) Type() string {
-	return "color"
-}
-
 type Style struct {
 	v *canvas.FontStyle
 }
@@ -566,11 +536,6 @@ func (v Variant) Set(s string) error {
 
 func (v Variant) Type() string {
 	return "font-variant"
-}
-
-func convColor(c colors.Color) color.Color {
-	clr := c.ToRGBA()
-	return color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: uint8(math.Round(255 * clr.A))}
 }
 
 //go:embed text.tpl

@@ -3,12 +3,12 @@ module github.com/kenshaw/fv
 go 1.20
 
 require (
+	github.com/kenshaw/colors v0.1.0
 	github.com/kenshaw/rasterm v0.1.10
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/tdewolff/canvas v0.0.0-20240115005846-3d69968abe72
 	golang.org/x/exp v0.0.0-20240112132812-db7319d0e0e3
-	gopkg.in/go-playground/colors.v1 v1.2.0
 )
 
 require (
@@ -20,6 +20,7 @@ require (
 	github.com/go-text/typesetting v0.1.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kenshaw/snaker v0.2.0 // indirect
 	github.com/mattn/go-sixel v0.0.5 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/tdewolff/minify/v2 v2.20.14 // indirect
