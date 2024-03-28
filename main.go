@@ -26,8 +26,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tdewolff/canvas"
-	fontpkg "github.com/tdewolff/canvas/font"
 	"github.com/tdewolff/canvas/renderers/rasterizer"
+	fontpkg "github.com/tdewolff/font"
 	"golang.org/x/exp/maps"
 )
 
