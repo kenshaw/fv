@@ -9,9 +9,9 @@ require (
 	github.com/kenshaw/rasterm v0.1.10
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/tdewolff/canvas v0.0.0-20240313223806-c16dea836d4e
-	github.com/tdewolff/font v0.0.0-20240307164724-5999bab46d7d
-	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
+	github.com/tdewolff/canvas v0.0.0-20240404204646-eb921826d23b
+	github.com/tdewolff/font v0.0.0-20240404204409-be214eafe484
+	golang.org/x/exp v0.0.0-20240404231335-c0f41cb1a7a0
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/benoitkugler/textlayout v0.3.0 // indirect
 	github.com/benoitkugler/textprocessing v0.0.3 // indirect
 	github.com/go-fonts/latin-modern v0.3.2 // indirect
-	github.com/go-text/typesetting v0.1.0 // indirect
+	github.com/go-text/typesetting v0.1.1 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kenshaw/snaker v0.2.0 // indirect
@@ -29,9 +29,9 @@ require (
 	github.com/tdewolff/minify/v2 v2.20.19 // indirect
 	github.com/tdewolff/parse/v2 v2.7.12 // indirect
 	golang.org/x/image v0.15.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/term v0.18.0 // indirect
+	golang.org/x/net v0.24.0 // indirect
+	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	star-tex.org/x/tex v0.4.0 // indirect
 )

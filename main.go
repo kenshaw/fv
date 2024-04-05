@@ -43,16 +43,25 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, appName, appVersion string, cliargs []string) error {
+func run(ctx context.Context, name, version string, cliargs []string) error {
 	var all, list, match bool
 	fg, bg := colors.FromColor(color.Black), colors.FromColor(color.White)
 	var size, margin, dpi int
 	style, variant := canvas.FontRegular, canvas.FontNormal
 	var text string
+	var (
+		bashCompletion       bool
+		zshCompletion        bool
+		fishCompletion       bool
+		powershellCompletion bool
+		noDescriptions       bool
+	)
 	c := &cobra.Command{
-		Use:     appName + " [flags] <font1> [font2, ..., fontN]",
-		Short:   appName + ", a command-line font viewer using terminal graphics",
-		Version: appVersion,
+		Use:           name + " [flags] <font1> [font2, ..., fontN]",
+		Short:         name + ", a command-line font viewer using terminal graphics",
+		Version:       version,
+		SilenceErrors: true,
+		SilenceUsage:  false,
 		Args: func(_ *cobra.Command, args []string) error {
 			switch hasArgs := len(args) != 0; {
 			case all && hasArgs:
@@ -61,8 +70,6 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 				return errors.New("--list does not take any args")
 			case match && !hasArgs:
 				return errors.New("--match requires one or more args")
-			case !all && !list && !match && !hasArgs:
-				return errors.New("requires one or more args")
 			case all && list,
 				all && match,
 				match && list:
@@ -71,6 +78,23 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// completions and short circuits
+			switch {
+			case bashCompletion:
+				return cmd.GenBashCompletionV2(os.Stdout, !noDescriptions)
+			case zshCompletion:
+				if noDescriptions {
+					return cmd.GenZshCompletionNoDesc(os.Stdout)
+				}
+				return cmd.GenZshCompletion(os.Stdout)
+			case fishCompletion:
+				return cmd.GenFishCompletion(os.Stdout, !noDescriptions)
+			case powershellCompletion:
+				if noDescriptions {
+					return cmd.GenPowerShellCompletion(os.Stdout)
+				}
+				return cmd.GenPowerShellCompletionWithDesc(os.Stdout)
+			}
 			sysfonts, err := fontpkg.FindSystemFonts(fontpkg.DefaultFontDirs())
 			if err != nil {
 				return err
@@ -84,7 +108,7 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			case match:
 				f = doMatch
 			}
-			return f(os.Stdout, sysfonts, &Params{
+			return f(os.Stdout, sysfonts, &Args{
 				FG:      fg,
 				BG:      bg,
 				Size:    size,
@@ -97,25 +121,38 @@ func run(ctx context.Context, appName, appVersion string, cliargs []string) erro
 			})
 		},
 	}
-	c.Flags().BoolVar(&all, "all", false, "show all system fonts")
-	c.Flags().BoolVar(&list, "list", false, "list system fonts")
-	c.Flags().BoolVar(&match, "match", false, "match system fonts")
-	c.Flags().Var(fg.Pflag(), "fg", "foreground color")
-	c.Flags().Var(bg.Pflag(), "bg", "background color")
-	c.Flags().IntVar(&size, "size", 48, "font size")
-	c.Flags().IntVar(&margin, "margin", 5, "margin")
-	c.Flags().IntVar(&dpi, "dpi", 100, "dpi")
-	c.Flags().Var(NewStyle(&style), "style", "font style")
-	c.Flags().Var(NewVariant(&variant), "variant", "font variant")
-	c.Flags().StringVar(&text, "text", "", "display text")
 	c.SetVersionTemplate("{{ .Name }} {{ .Version }}\n")
 	c.InitDefaultHelpCmd()
 	c.SetArgs(cliargs[1:])
-	c.SilenceErrors, c.SilenceUsage = true, false
+	flags := c.Flags()
+	flags.BoolVar(&all, "all", false, "show all system fonts")
+	flags.BoolVar(&list, "list", false, "list system fonts")
+	flags.BoolVar(&match, "match", false, "match system fonts")
+	flags.Var(fg.Pflag(), "fg", "foreground color")
+	flags.Var(bg.Pflag(), "bg", "background color")
+	flags.IntVar(&size, "size", 48, "font size")
+	flags.IntVar(&margin, "margin", 5, "margin")
+	flags.IntVar(&dpi, "dpi", 100, "dpi")
+	flags.Var(NewStyle(&style), "style", "font style")
+	flags.Var(NewVariant(&variant), "variant", "font variant")
+	flags.StringVar(&text, "text", "", "display text")
+	// completions
+	flags.BoolVar(&bashCompletion, "completion-script-bash", false, "output bash completion script and exit")
+	flags.BoolVar(&zshCompletion, "completion-script-zsh", false, "output zsh completion script and exit")
+	flags.BoolVar(&fishCompletion, "completion-script-fish", false, "output fish completion script and exit")
+	flags.BoolVar(&powershellCompletion, "completion-script-powershell", false, "output powershell completion script and exit")
+	flags.BoolVar(&noDescriptions, "no-descriptions", false, "disable descriptions in completion scripts")
+	// mark hidden
+	for _, name := range []string{
+		"completion-script-bash", "completion-script-zsh", "completion-script-fish",
+		"completion-script-powershell", "no-descriptions",
+	} {
+		flags.Lookup(name).Hidden = true
+	}
 	return c.ExecuteContext(ctx)
 }
 
-type Params struct {
+type Args struct {
 	FG      color.Color
 	BG      color.Color
 	Size    int
@@ -129,14 +166,14 @@ type Params struct {
 	tpl     *template.Template
 }
 
-func (v *Params) Template() (*template.Template, error) {
+func (args *Args) Template() (*template.Template, error) {
 	var err error
-	v.once.Do(func() {
-		s := v.Text
+	args.once.Do(func() {
+		s := args.Text
 		if s == "" {
 			s = string(textTpl)
 		}
-		v.tpl, err = template.New("").Funcs(map[string]interface{}{
+		args.tpl, err = template.New("").Funcs(map[string]interface{}{
 			"size": func(size int) string {
 				return fmt.Sprintf("\x00%d\x00", size)
 			},
@@ -148,31 +185,31 @@ func (v *Params) Template() (*template.Template, error) {
 	switch {
 	case err != nil:
 		return nil, err
-	case v.tpl == nil:
+	case args.tpl == nil:
 		return nil, errors.New("invalid template state")
 	}
-	return v.tpl, nil
+	return args.tpl, nil
 }
 
 // do renders the specified font queries to w.
-func do(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
+func do(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
 	if !rasterm.Available() {
 		return rasterm.ErrTermGraphicsNotAvailable
 	}
 	var fonts []*Font
 	// collect fonts
-	for i := 0; i < len(v.Args); i++ {
-		v, err := Open(sysfonts, v.Args[i], v.Style)
+	for i := 0; i < len(args.Args); i++ {
+		v, err := Open(sysfonts, args.Args[i], args.Style)
 		if err != nil {
 			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
 		}
 		fonts = append(fonts, v...)
 	}
-	return render(w, fonts, v)
+	return render(w, fonts, args)
 }
 
 // doAll renders all system fonts to w.
-func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
+func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
 	if !rasterm.Available() {
 		return rasterm.ErrTermGraphicsNotAvailable
 	}
@@ -187,10 +224,10 @@ func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
 			fonts = append(fonts, NewFont(sysfonts.Fonts[family][style]))
 		}
 	}
-	return render(w, fonts, v)
+	return render(w, fonts, args)
 }
 
-func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Params) error {
+func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Args) error {
 	families := maps.Keys(sysfonts.Fonts)
 	slices.Sort(families)
 	for i := 0; i < len(families); i++ {
@@ -206,22 +243,22 @@ func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Params) error {
 	return nil
 }
 
-func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, v *Params) error {
-	for _, name := range v.Args {
-		if font := Match(sysfonts, name, v.Style); font != nil {
+func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
+	for _, name := range args.Args {
+		if font := Match(sysfonts, name, args.Style); font != nil {
 			font.WriteYAML(w)
 		}
 	}
 	return nil
 }
 
-func render(w io.Writer, fonts []*Font, v *Params) error {
-	tpl, err := v.Template()
+func render(w io.Writer, fonts []*Font, args *Args) error {
+	tpl, err := args.Template()
 	if err != nil {
 		return err
 	}
 	for i := 0; i < len(fonts); i++ {
-		if err := fonts[i].Render(w, tpl, v); err != nil {
+		if err := fonts[i].Render(w, tpl, args); err != nil {
 			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
 		}
 		if i != len(fonts)-1 {
@@ -348,9 +385,9 @@ func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
 	return ff, nil
 }
 
-func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
+func (font *Font) Render(w io.Writer, tpl *template.Template, args *Args) error {
 	// load font family
-	ff, err := font.Load(v.Style)
+	ff, err := font.Load(args.Style)
 	if err != nil {
 		return err
 	}
@@ -358,7 +395,7 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 	// generate text
 	buf := new(bytes.Buffer)
 	if err := tpl.Execute(buf, TemplateData{
-		Size:       v.Size,
+		Size:       args.Size,
 		Name:       font.BestName(),
 		Style:      font.Style,
 		SampleText: font.SampleText,
@@ -373,12 +410,12 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 	ctx := canvas.NewContext(c)
 
 	ctx.SetZIndex(1)
-	ctx.SetFillColor(v.FG)
+	ctx.SetFillColor(args.FG)
 
 	// draw text
-	lines, sizes := breakLines(buf.Bytes(), v.Size)
+	lines, sizes := breakLines(buf.Bytes(), args.Size)
 	for i, y := 0, float64(0); i < len(lines); i++ {
-		face := ff.Face(float64(sizes[i]), v.FG, v.Style, v.Variant)
+		face := ff.Face(float64(sizes[i]), args.FG, args.Style, args.Variant)
 		txt := canvas.NewTextBox(face, strings.TrimSpace(lines[i]), 0, 0, canvas.Left, canvas.Top, 0, 0)
 		b := txt.Bounds()
 		ctx.DrawText(0, y, txt)
@@ -386,11 +423,11 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 	}
 
 	// fit canvas to context
-	c.Fit(float64(v.Margin))
+	c.Fit(float64(args.Margin))
 
 	// draw background
 	ctx.SetZIndex(-1)
-	ctx.SetFillColor(v.BG)
+	ctx.SetFillColor(args.BG)
 	width, height := ctx.Size()
 	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
 
@@ -399,9 +436,9 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, v *Params) error {
 	// encode
 	return rasterm.Encode(w, rasterizer.Draw(
 		c,
-		canvas.DPI(float64(v.DPI)),
-		canvas.DefaultColorSpace),
-	)
+		canvas.DPI(float64(args.DPI)),
+		canvas.DefaultColorSpace,
+	))
 }
 
 func breakLines(buf []byte, size int) ([]string, []int) {
@@ -452,89 +489,89 @@ func peek(r []rune, i int) rune {
 }
 
 type Style struct {
-	v *canvas.FontStyle
+	fontStyle *canvas.FontStyle
 }
 
-func NewStyle(v *canvas.FontStyle) pflag.Value {
+func NewStyle(fontStyle *canvas.FontStyle) pflag.Value {
 	return Style{
-		v: v,
+		fontStyle: fontStyle,
 	}
 }
 
-func (v Style) String() string {
-	return strings.ToLower(v.v.String())
+func (style Style) String() string {
+	return strings.ToLower(style.fontStyle.String())
 }
 
-func (v Style) Set(s string) error {
+func (style Style) Set(s string) error {
 	italic, str := false, strings.ToLower(s)
 	if italicRE.MatchString(str) {
 		italic, str = true, italicRE.ReplaceAllString(str, "")
 	}
 	switch strings.TrimSpace(str) {
 	case "regular", "", "400", "0":
-		*v.v = canvas.FontRegular
+		*style.fontStyle = canvas.FontRegular
 	case "thin", "100":
-		*v.v = canvas.FontThin
+		*style.fontStyle = canvas.FontThin
 	case "extra-light", "extralight", "200":
-		*v.v = canvas.FontExtraLight
+		*style.fontStyle = canvas.FontExtraLight
 	case "light", "300":
-		*v.v = canvas.FontLight
+		*style.fontStyle = canvas.FontLight
 	case "medium", "500":
-		*v.v = canvas.FontMedium
+		*style.fontStyle = canvas.FontMedium
 	case "semi-bold", "semibold", "600":
-		*v.v = canvas.FontSemiBold
+		*style.fontStyle = canvas.FontSemiBold
 	case "bold", "700":
-		*v.v = canvas.FontBold
+		*style.fontStyle = canvas.FontBold
 	case "extra-bold", "extrabold", "800":
-		*v.v = canvas.FontExtraBold
+		*style.fontStyle = canvas.FontExtraBold
 	case "black", "900":
-		*v.v = canvas.FontBlack
+		*style.fontStyle = canvas.FontBlack
 	default:
 		return fmt.Errorf("invalid font style %q", s)
 	}
 	if italic {
-		*v.v |= canvas.FontItalic
+		*style.fontStyle |= canvas.FontItalic
 	}
 	return nil
 }
 
 var italicRE = regexp.MustCompile(`(?i)\s*italic\s*`)
 
-func (v Style) Type() string {
+func (style Style) Type() string {
 	return "font-style"
 }
 
 type Variant struct {
-	v *canvas.FontVariant
+	fontVariant *canvas.FontVariant
 }
 
-func NewVariant(v *canvas.FontVariant) pflag.Value {
+func NewVariant(fontVariant *canvas.FontVariant) pflag.Value {
 	return Variant{
-		v: v,
+		fontVariant: fontVariant,
 	}
 }
 
-func (v Variant) String() string {
-	return strings.ToLower(v.v.String())
+func (variant Variant) String() string {
+	return strings.ToLower(variant.fontVariant.String())
 }
 
-func (v Variant) Set(s string) error {
+func (variant Variant) Set(s string) error {
 	switch strings.ToLower(s) {
 	case "normal":
-		*v.v = canvas.FontNormal
+		*variant.fontVariant = canvas.FontNormal
 	case "subscript":
-		*v.v = canvas.FontSubscript
+		*variant.fontVariant = canvas.FontSubscript
 	case "superscript":
-		*v.v = canvas.FontSuperscript
+		*variant.fontVariant = canvas.FontSuperscript
 	case "smallcaps":
-		*v.v = canvas.FontSmallcaps
+		*variant.fontVariant = canvas.FontSmallcaps
 	default:
 		return fmt.Errorf("invalid font variant %q", s)
 	}
 	return nil
 }
 
-func (v Variant) Type() string {
+func (variant Variant) Type() string {
 	return "font-variant"
 }
 
