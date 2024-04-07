@@ -10,7 +10,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/tdewolff/canvas v0.0.0-20240404204646-eb921826d23b
-	github.com/tdewolff/font v0.0.0-20240404204409-be214eafe484
+	github.com/tdewolff/font v0.0.0-20240407023827-102a098af304
 	golang.org/x/exp v0.0.0-20240404231335-c0f41cb1a7a0
 )
 
