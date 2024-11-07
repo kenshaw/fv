@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,7 +29,6 @@ import (
 	"github.com/tdewolff/canvas"
 	"github.com/tdewolff/canvas/renderers/rasterizer"
 	fontpkg "github.com/tdewolff/font"
-	"golang.org/x/exp/maps"
 )
 
 var (
@@ -213,14 +213,10 @@ func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
 	if !rasterm.Available() {
 		return rasterm.ErrTermGraphicsNotAvailable
 	}
-	families := maps.Keys(sysfonts.Fonts)
-	slices.Sort(families)
 	// collect fonts
 	var fonts []*Font
-	for _, family := range families {
-		styles := maps.Keys(sysfonts.Fonts[family])
-		slices.Sort(styles)
-		for _, style := range styles {
+	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
+		for _, style := range slices.Sorted(maps.Keys(sysfonts.Fonts[family])) {
 			fonts = append(fonts, NewFont(sysfonts.Fonts[family][style]))
 		}
 	}
@@ -228,16 +224,12 @@ func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
 }
 
 func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Args) error {
-	families := maps.Keys(sysfonts.Fonts)
-	slices.Sort(families)
-	for i := 0; i < len(families); i++ {
+	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
 		fmt.Fprintln(w, "---")
-		fmt.Fprintf(w, "family: %q\n", families[i])
+		fmt.Fprintf(w, "family: %q\n", family)
 		fmt.Fprintln(w, "styles:")
-		styles := maps.Keys(sysfonts.Fonts[families[i]])
-		slices.Sort(styles)
-		for _, style := range styles {
-			fmt.Fprintf(w, "  %s: %s\n", style, sysfonts.Fonts[families[i]][style].Filename)
+		for _, style := range slices.Sorted(maps.Keys(sysfonts.Fonts[family])) {
+			fmt.Fprintf(w, "  %s: %s\n", style, sysfonts.Fonts[family][style].Filename)
 		}
 	}
 	return nil

@@ -1,8 +1,6 @@
 module github.com/kenshaw/fv
 
-go 1.22.0
-
-toolchain go1.22.1
+go 1.23
 
 require (
 	github.com/kenshaw/colors v0.1.6
@@ -11,7 +9,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/tdewolff/canvas v0.0.0-20241107191514-17a7fb09dce2
 	github.com/tdewolff/font v0.0.0-20240728193914-9dc6e3441d03
-	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 )
 
 require (
