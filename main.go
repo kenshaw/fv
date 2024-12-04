@@ -8,7 +8,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"image/color"
 	"io"
 	"maps"
 	"os"
@@ -24,146 +23,72 @@ import (
 
 	"github.com/kenshaw/colors"
 	"github.com/kenshaw/rasterm"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tdewolff/canvas"
 	"github.com/tdewolff/canvas/renderers/rasterizer"
 	fontpkg "github.com/tdewolff/font"
-)
-
-var (
-	name    = "fv"
-	version = "0.0.0-dev"
+	"github.com/xo/ox"
+	_ "github.com/xo/ox/color"
 )
 
 func main() {
-	if err := run(context.Background(), name, version, os.Args); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+	args := &Args{}
+	ox.RunContext(
+		context.Background(),
+		ox.Exec(run(os.Stdout, args)),
+		ox.Usage("fv", "a command-line font view using terminal graphics"),
+		ox.Defaults(),
+		ox.From(args),
+	)
 }
 
-func run(ctx context.Context, name, version string, cliargs []string) error {
-	var all, list, match bool
-	fg, bg := colors.FromColor(color.Black), colors.FromColor(color.White)
-	var size, margin, dpi int
-	style, variant := canvas.FontRegular, canvas.FontNormal
-	var text string
-	var (
-		bashCompletion       bool
-		zshCompletion        bool
-		fishCompletion       bool
-		powershellCompletion bool
-		noDescriptions       bool
-	)
-	c := &cobra.Command{
-		Use:           name + " [flags] <font1> [font2, ..., fontN]",
-		Short:         name + ", a command-line font viewer using terminal graphics",
-		Version:       version,
-		SilenceErrors: true,
-		SilenceUsage:  false,
-		Args: func(_ *cobra.Command, args []string) error {
-			switch hasArgs := len(args) != 0; {
-			case all && hasArgs:
-				return errors.New("--all does not take any args")
-			case list && hasArgs:
-				return errors.New("--list does not take any args")
-			case match && !hasArgs:
-				return errors.New("--match requires one or more args")
-			case all && list,
-				all && match,
-				match && list:
-				return errors.New("--all, --list, and --match are exclusive")
-			}
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// completions and short circuits
-			switch {
-			case bashCompletion:
-				return cmd.GenBashCompletionV2(os.Stdout, !noDescriptions)
-			case zshCompletion:
-				if noDescriptions {
-					return cmd.GenZshCompletionNoDesc(os.Stdout)
-				}
-				return cmd.GenZshCompletion(os.Stdout)
-			case fishCompletion:
-				return cmd.GenFishCompletion(os.Stdout, !noDescriptions)
-			case powershellCompletion:
-				if noDescriptions {
-					return cmd.GenPowerShellCompletion(os.Stdout)
-				}
-				return cmd.GenPowerShellCompletionWithDesc(os.Stdout)
-			}
-			sysfonts, err := fontpkg.FindSystemFonts(fontpkg.DefaultFontDirs())
-			if err != nil {
-				return err
-			}
-			f := do
-			switch {
-			case all:
-				f = doAll
-			case list:
-				f = doList
-			case match:
-				f = doMatch
-			}
-			return f(os.Stdout, sysfonts, &Args{
-				FG:      fg,
-				BG:      bg,
-				Size:    size,
-				DPI:     dpi,
-				Margin:  margin,
-				Style:   style,
-				Variant: variant,
-				Text:    text,
-				Args:    args,
-			})
-		},
+func run(w io.Writer, args *Args) func(context.Context, []string) error {
+	return func(ctx context.Context, cliargs []string) error {
+		// style, variant := canvas.FontRegular, canvas.FontNormal
+		sysfonts, err := fontpkg.FindSystemFonts(fontpkg.DefaultFontDirs())
+		if err != nil {
+			return err
+		}
+		switch hasArgs := len(cliargs) != 0; {
+		case args.All && hasArgs:
+			return errors.New("--all does not take any args")
+		case args.List && hasArgs:
+			return errors.New("--list does not take any args")
+		case args.Match && !hasArgs:
+			return errors.New("--match requires one or more args")
+		case args.All && args.List,
+			args.All && args.Match,
+			args.Match && args.List:
+			return errors.New("--all, --list, and --match are exclusive")
+		}
+		f := do
+		switch {
+		case args.All:
+			f = doAll
+		case args.List:
+			f = doList
+		case args.Match:
+			f = doMatch
+		}
+		return f(w, sysfonts, args, cliargs)
 	}
-	c.SetVersionTemplate("{{ .Name }} {{ .Version }}\n")
-	c.InitDefaultHelpCmd()
-	c.SetArgs(cliargs[1:])
-	flags := c.Flags()
-	flags.BoolVar(&all, "all", false, "show all system fonts")
-	flags.BoolVar(&list, "list", false, "list system fonts")
-	flags.BoolVar(&match, "match", false, "match system fonts")
-	flags.Var(fg.Pflag(), "fg", "foreground color")
-	flags.Var(bg.Pflag(), "bg", "background color")
-	flags.IntVar(&size, "size", 48, "font size")
-	flags.IntVar(&margin, "margin", 5, "margin")
-	flags.IntVar(&dpi, "dpi", 100, "dpi")
-	flags.Var(NewStyle(&style), "style", "font style")
-	flags.Var(NewVariant(&variant), "variant", "font variant")
-	flags.StringVar(&text, "text", "", "display text")
-	// completions
-	flags.BoolVar(&bashCompletion, "completion-script-bash", false, "output bash completion script and exit")
-	flags.BoolVar(&zshCompletion, "completion-script-zsh", false, "output zsh completion script and exit")
-	flags.BoolVar(&fishCompletion, "completion-script-fish", false, "output fish completion script and exit")
-	flags.BoolVar(&powershellCompletion, "completion-script-powershell", false, "output powershell completion script and exit")
-	flags.BoolVar(&noDescriptions, "no-descriptions", false, "disable descriptions in completion scripts")
-	// mark hidden
-	for _, name := range []string{
-		"completion-script-bash", "completion-script-zsh", "completion-script-fish",
-		"completion-script-powershell", "no-descriptions",
-	} {
-		flags.Lookup(name).Hidden = true
-	}
-	return c.ExecuteContext(ctx)
 }
 
 type Args struct {
-	FG      color.Color
-	BG      color.Color
-	Size    int
-	DPI     int
-	Margin  int
-	Style   canvas.FontStyle
-	Variant canvas.FontVariant
-	Text    string
-	Args    []string
-	once    sync.Once
-	tpl     *template.Template
+	All     bool               `ox:"show all system fonts"`
+	List    bool               `ox:"list system fonts"`
+	Match   bool               `ox:"match system fonts"`
+	Fg      *colors.Color      `ox:"foreground color,default:black"`
+	Bg      *colors.Color      `ox:"background color,default:white"`
+	Size    int                `ox:"font size,default:48"`
+	Dpi     int                `ox:"dpi,default:100"`
+	Margin  int                `ox:"margin,default:5"`
+	Style   canvas.FontStyle   `ox:"font style"`
+	Variant canvas.FontVariant `ox:"font variant"`
+	Text    string             `ox:"display text"`
+
+	once sync.Once
+	tpl  *template.Template
 }
 
 func (args *Args) Template() (*template.Template, error) {
@@ -192,24 +117,24 @@ func (args *Args) Template() (*template.Template, error) {
 }
 
 // do renders the specified font queries to w.
-func do(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
+func do(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args, cliargs []string) error {
 	if !rasterm.Available() {
 		return rasterm.ErrTermGraphicsNotAvailable
 	}
 	var fonts []*Font
 	// collect fonts
-	for i := 0; i < len(args.Args); i++ {
-		v, err := Open(sysfonts, args.Args[i], args.Style)
+	for i := 0; i < len(cliargs); i++ {
+		v, err := Open(sysfonts, cliargs[i], args.Style)
 		if err != nil {
 			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
 		}
 		fonts = append(fonts, v...)
 	}
-	return render(w, fonts, args)
+	return render(w, fonts, args, cliargs)
 }
 
 // doAll renders all system fonts to w.
-func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
+func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args, cliargs []string) error {
 	if !rasterm.Available() {
 		return rasterm.ErrTermGraphicsNotAvailable
 	}
@@ -220,10 +145,10 @@ func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
 			fonts = append(fonts, NewFont(sysfonts.Fonts[family][style]))
 		}
 	}
-	return render(w, fonts, args)
+	return render(w, fonts, args, cliargs)
 }
 
-func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Args) error {
+func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Args, _ []string) error {
 	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
 		fmt.Fprintln(w, "---")
 		fmt.Fprintf(w, "family: %q\n", family)
@@ -235,8 +160,8 @@ func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Args) error {
 	return nil
 }
 
-func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
-	for _, name := range args.Args {
+func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args, cliargs []string) error {
+	for _, name := range cliargs {
 		if font := Match(sysfonts, name, args.Style); font != nil {
 			font.WriteYAML(w)
 		}
@@ -244,7 +169,7 @@ func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args) error {
 	return nil
 }
 
-func render(w io.Writer, fonts []*Font, args *Args) error {
+func render(w io.Writer, fonts []*Font, args *Args, cliargs []string) error {
 	tpl, err := args.Template()
 	if err != nil {
 		return err
@@ -402,12 +327,12 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, args *Args) error 
 	ctx := canvas.NewContext(c)
 
 	ctx.SetZIndex(1)
-	ctx.SetFillColor(args.FG)
+	ctx.SetFillColor(args.Fg)
 
 	// draw text
 	lines, sizes := breakLines(buf.Bytes(), args.Size)
 	for i, y := 0, float64(0); i < len(lines); i++ {
-		face := ff.Face(float64(sizes[i]), args.FG, args.Style, args.Variant)
+		face := ff.Face(float64(sizes[i]), args.Fg, args.Style, args.Variant)
 		txt := canvas.NewTextBox(face, strings.TrimSpace(lines[i]), 0, 0, canvas.Left, canvas.Top, 0, 0)
 		b := txt.Bounds()
 		ctx.DrawText(0, y, txt)
@@ -419,7 +344,7 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, args *Args) error 
 
 	// draw background
 	ctx.SetZIndex(-1)
-	ctx.SetFillColor(args.BG)
+	ctx.SetFillColor(args.Bg)
 	width, height := ctx.Size()
 	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
 
@@ -428,7 +353,7 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, args *Args) error 
 	// encode
 	return rasterm.Encode(w, rasterizer.Draw(
 		c,
-		canvas.DPI(float64(args.DPI)),
+		canvas.DPI(float64(args.Dpi)),
 		canvas.DefaultColorSpace,
 	))
 }

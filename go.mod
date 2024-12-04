@@ -3,12 +3,12 @@ module github.com/kenshaw/fv
 go 1.23
 
 require (
-	github.com/kenshaw/colors v0.1.6
+	github.com/kenshaw/colors v0.2.0
 	github.com/kenshaw/rasterm v0.1.11
-	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/tdewolff/canvas v0.0.0-20241107191514-17a7fb09dce2
 	github.com/tdewolff/font v0.0.0-20240728193914-9dc6e3441d03
+	github.com/xo/ox v0.0.0-20241204042113-c44357c6c99f
 )
 
 require (
@@ -19,8 +19,6 @@ require (
 	github.com/go-fonts/latin-modern v0.3.3 // indirect
 	github.com/go-text/typesetting v0.2.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/kenshaw/snaker v0.3.0 // indirect
 	github.com/mattn/go-sixel v0.0.5 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/tdewolff/minify/v2 v2.21.1 // indirect
