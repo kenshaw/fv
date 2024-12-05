@@ -336,7 +336,7 @@ func (font *Font) Render(w io.Writer, tpl *template.Template, args *Args) error 
 		txt := canvas.NewTextBox(face, strings.TrimSpace(lines[i]), 0, 0, canvas.Left, canvas.Top, 0, 0)
 		b := txt.Bounds()
 		ctx.DrawText(0, y, txt)
-		y += b.Y1 - b.Y0
+		y += b.Y0 - b.Y1
 	}
 
 	// fit canvas to context
