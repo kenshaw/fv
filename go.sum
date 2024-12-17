@@ -52,8 +52,8 @@ github.com/tdewolff/parse/v2 v2.7.19/go.mod h1:3FbJWZp3XT9OWVN3Hmfp0p/a08v4h8J9W
 github.com/tdewolff/test v1.0.11-0.20231101010635-f1265d231d52/go.mod h1:6DAvZliBAAnD7rhVgwaM7DE5/d9NMOAJ09SqYqeK4QE=
 github.com/tdewolff/test v1.0.11-0.20240106005702-7de5f7df4739 h1:IkjBCtQOOjIn03u/dMQK9g+Iw9ewps4mCl1nB8Sscbo=
 github.com/tdewolff/test v1.0.11-0.20240106005702-7de5f7df4739/go.mod h1:XPuWBzvdUzhCuxWO1ojpXsyzsA5bFoS3tO/Q3kFuTG8=
-github.com/xo/ox v0.0.0-20241204233123-bcda5677f087 h1:hWUooMY47DB7x3g38Wc9SZ7MwxW25HLx5OjPr8gdVGM=
-github.com/xo/ox v0.0.0-20241204233123-bcda5677f087/go.mod h1:P+6CbW2koi1wfhvTg0ygy9Q5egZX2BoWrcZc+K3MLEg=
+github.com/xo/ox v0.0.0-20241217181128-6e4dc268b890 h1:qqPnYgd8RcmLwM6Q0eY17xOfMGB34zdA6GxEicFd4k0=
+github.com/xo/ox v0.0.0-20241217181128-6e4dc268b890/go.mod h1:P+6CbW2koi1wfhvTg0ygy9Q5egZX2BoWrcZc+K3MLEg=
 github.com/xyproto/randomstring v1.0.5 h1:YtlWPoRdgMu3NZtP45drfy1GKoojuR7hmRcnhZqKjWU=
 github.com/xyproto/randomstring v1.0.5/go.mod h1:rgmS5DeNXLivK7YprL0pY+lTuhNQW3iGxZ18UQApw/E=
 golang.org/x/image v0.0.0-20210504121937-7319ad40d33e/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=

@@ -8,7 +8,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/tdewolff/canvas v0.0.0-20241202004848-95f003d9bc50
 	github.com/tdewolff/font v0.0.0-20241125190050-d899fdc808fc
-	github.com/xo/ox v0.0.0-20241204233123-bcda5677f087
+	github.com/xo/ox v0.0.0-20241217181128-6e4dc268b890
 )
 
 require (
