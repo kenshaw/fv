@@ -31,12 +31,18 @@ import (
 	_ "github.com/xo/ox/color"
 )
 
+var (
+	name    = "fv"
+	version = "0.0.0-dev"
+)
+
 func main() {
+	ox.DefaultVersionString = version
 	args := &Args{}
 	ox.RunContext(
 		context.Background(),
 		ox.Exec(run(os.Stdout, args)),
-		ox.Usage("fv", "a command-line font view using terminal graphics"),
+		ox.Usage(name, "a command-line font view using terminal graphics"),
 		ox.Defaults(),
 		ox.From(args),
 	)
