@@ -42,7 +42,7 @@ func main() {
 	ox.RunContext(
 		context.Background(),
 		ox.Exec(run(os.Stdout, args)),
-		ox.Usage(name, "a command-line font view using terminal graphics"),
+		ox.Usage(name, "a command-line font viewer using terminal graphics"),
 		ox.Defaults(),
 		ox.From(args),
 	)
