@@ -3,6 +3,12 @@
 `fv` is a command-line font viewer using terminal graphics (Sixel, iTerm,
 Kitty).
 
+`NOTE:` this app is now deprecated. Please use [`github.com/kenshaw/iv`][iv]
+instead, as it supports all the functionality of this application and more file
+formats.
+
+[iv]: https://github.com/kenshaw/iv
+
 <p align="center">
   <a href="#installing" title="Installing">Installing</a> |
   <a href="#building" title="Building">Building</a> |

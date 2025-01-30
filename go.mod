@@ -1,14 +1,14 @@
 module github.com/kenshaw/fv
 
-go 1.23
+go 1.23.5
 
 require (
-	github.com/kenshaw/colors v0.2.0
+	github.com/kenshaw/colors v0.2.1
 	github.com/kenshaw/rasterm v0.1.12
-	github.com/spf13/pflag v1.0.5
-	github.com/tdewolff/canvas v0.0.0-20250107192618-cd92874ebaf2
-	github.com/tdewolff/font v0.0.0-20241125190050-d899fdc808fc
-	github.com/xo/ox v0.0.0-20250107165807-6c6bbcec66d1
+	github.com/spf13/pflag v1.0.6
+	github.com/tdewolff/canvas v0.0.0-20250121210638-095c8720cf5b
+	github.com/tdewolff/font v0.0.0-20250120192450-68a3ecdf9008
+	github.com/xo/ox v0.0.0-20250130034615-44e38f949f5c
 )
 
 require (
@@ -21,8 +21,8 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/mattn/go-sixel v0.0.5 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
-	github.com/tdewolff/minify/v2 v2.21.2 // indirect
-	github.com/tdewolff/parse/v2 v2.7.19 // indirect
+	github.com/tdewolff/minify/v2 v2.21.3 // indirect
+	github.com/tdewolff/parse/v2 v2.7.20 // indirect
 	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
