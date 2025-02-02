@@ -4,6 +4,7 @@ go 1.23.5
 
 require (
 	github.com/kenshaw/colors v0.2.1
+	github.com/kenshaw/fontimg v0.1.1
 	github.com/kenshaw/rasterm v0.1.12
 	github.com/spf13/pflag v1.0.6
 	github.com/tdewolff/canvas v0.0.0-20250121210638-095c8720cf5b

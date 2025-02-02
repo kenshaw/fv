@@ -31,6 +31,8 @@ github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 h1:DACJavvAHhabrF0
 github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0/go.mod h1:E/TSTwGwJL78qG/PmXZO1EjYhfJinVAhrmmHX6Z8B9k=
 github.com/kenshaw/colors v0.2.1 h1:faVXggEiC12dah/CEec8qvbRGbyp6Zx+OwaH3Y/6sB4=
 github.com/kenshaw/colors v0.2.1/go.mod h1:Aok7+9KpR+qEwgCxDEoLBS6IGFhY1iRJIzbcv5ijewI=
+github.com/kenshaw/fontimg v0.1.1 h1:XSmqjtRQ7BDHLzqKLggpG7SnUSPQXf8n5ul14/bl/6Q=
+github.com/kenshaw/fontimg v0.1.1/go.mod h1:F+3wTmIwJoIk9n9jBK2WPuyEcnpvD4UZECrqHg4ixzk=
 github.com/kenshaw/rasterm v0.1.12 h1:NfxlvB+HI02tOIUHv+4gV2rC/MstIQb0wBCC5mL8It0=
 github.com/kenshaw/rasterm v0.1.12/go.mod h1:oKL76NdzLgqRc+d4cHAi5btI1kx5JhnLm11GIzxRlkE=
 github.com/mattn/go-sixel v0.0.5 h1:55w2FR5ncuhKhXrM5ly1eiqMQfZsnAHIpYNGZX03Cv8=

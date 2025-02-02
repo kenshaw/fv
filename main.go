@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"errors"
@@ -11,21 +10,17 @@ import (
 	"io"
 	"maps"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
-	"unicode"
 
 	"github.com/kenshaw/colors"
+	"github.com/kenshaw/fontimg"
 	"github.com/kenshaw/rasterm"
 	"github.com/spf13/pflag"
 	"github.com/tdewolff/canvas"
-	"github.com/tdewolff/canvas/renderers/rasterizer"
 	fontpkg "github.com/tdewolff/font"
 	"github.com/xo/ox"
 	_ "github.com/xo/ox/color"
@@ -41,14 +36,14 @@ func main() {
 	args := &Args{}
 	ox.RunContext(
 		context.Background(),
-		ox.Exec(run(os.Stdout, args)),
+		ox.Exec(args.run(os.Stdout)),
 		ox.Usage(name, "a command-line font viewer using terminal graphics"),
 		ox.Defaults(),
 		ox.From(args),
 	)
 }
 
-func run(w io.Writer, args *Args) func(context.Context, []string) error {
+func (args *Args) run(w io.Writer) func(context.Context, []string) error {
 	return func(ctx context.Context, cliargs []string) error {
 		// style, variant := canvas.FontRegular, canvas.FontNormal
 		sysfonts, err := fontpkg.FindSystemFonts(fontpkg.DefaultFontDirs())
@@ -67,16 +62,16 @@ func run(w io.Writer, args *Args) func(context.Context, []string) error {
 			args.Match && args.List:
 			return errors.New("--all, --list, and --match are exclusive")
 		}
-		f := do
+		f := args.do
 		switch {
 		case args.All:
-			f = doAll
+			f = args.doAll
 		case args.List:
-			f = doList
+			f = args.doList
 		case args.Match:
-			f = doMatch
+			f = args.doMatch
 		}
-		return f(w, sysfonts, args, cliargs)
+		return f(w, sysfonts, cliargs)
 	}
 }
 
@@ -86,9 +81,9 @@ type Args struct {
 	Match   bool               `ox:"match system fonts"`
 	Fg      *colors.Color      `ox:"foreground color,default:black"`
 	Bg      *colors.Color      `ox:"background color,default:white"`
-	Size    int                `ox:"font size,default:48"`
-	Dpi     int                `ox:"dpi,default:100"`
-	Margin  int                `ox:"margin,default:5"`
+	Size    uint               `ox:"font size,default:48"`
+	Dpi     uint               `ox:"dpi,default:100"`
+	Margin  uint               `ox:"margin,default:5"`
 	Style   canvas.FontStyle   `ox:"font style"`
 	Variant canvas.FontVariant `ox:"font variant"`
 	Text    string             `ox:"display text"`
@@ -97,7 +92,91 @@ type Args struct {
 	tpl  *template.Template
 }
 
-func (args *Args) Template() (*template.Template, error) {
+// do renders the specified font queries to w.
+func (args *Args) do(w io.Writer, sysfonts *fontpkg.SystemFonts, cliargs []string) error {
+	if !rasterm.Available() {
+		return rasterm.ErrTermGraphicsNotAvailable
+	}
+	var fonts []*fontimg.Font
+	// collect fonts
+	for i := 0; i < len(cliargs); i++ {
+		v, err := fontimg.Open(cliargs[i], args.Style, sysfonts)
+		if err != nil {
+			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
+		}
+		fonts = append(fonts, v...)
+	}
+	return args.render(w, fonts)
+}
+
+// doAll renders all system fonts to w.
+func (args *Args) doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, cliargs []string) error {
+	if !rasterm.Available() {
+		return rasterm.ErrTermGraphicsNotAvailable
+	}
+	// collect fonts
+	var fonts []*fontimg.Font
+	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
+		for _, style := range slices.Sorted(maps.Keys(sysfonts.Fonts[family])) {
+			fonts = append(fonts, fontimg.NewFont(sysfonts.Fonts[family][style]))
+		}
+	}
+	return args.render(w, fonts)
+}
+
+func (args *Args) doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ []string) error {
+	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
+		fmt.Fprintln(w, "---")
+		fmt.Fprintf(w, "family: %q\n", family)
+		fmt.Fprintln(w, "styles:")
+		for _, style := range slices.Sorted(maps.Keys(sysfonts.Fonts[family])) {
+			fmt.Fprintf(w, "  %s: %s\n", style, sysfonts.Fonts[family][style].Filename)
+		}
+	}
+	return nil
+}
+
+func (args *Args) doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, cliargs []string) error {
+	for _, name := range cliargs {
+		if font := fontimg.Match(name, args.Style, sysfonts); font != nil {
+			font.WriteYAML(w)
+		}
+	}
+	return nil
+}
+
+func (args *Args) render(w io.Writer, fonts []*fontimg.Font) error {
+	tpl, err := args.templ()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(fonts); i++ {
+		img, err := fonts[i].Rasterize(
+			tpl,
+			int(args.Size),
+			args.Style,
+			args.Variant,
+			args.Fg,
+			args.Bg,
+			float64(args.Dpi),
+			float64(args.Margin),
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
+			continue
+		}
+		if err := rasterm.Encode(w, img); err != nil {
+			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
+			continue
+		}
+		if i != len(fonts)-1 {
+			fmt.Fprintln(w)
+		}
+	}
+	return nil
+}
+
+func (args *Args) templ() (*template.Template, error) {
 	var err error
 	args.once.Do(func() {
 		s := args.Text
@@ -120,295 +199,6 @@ func (args *Args) Template() (*template.Template, error) {
 		return nil, errors.New("invalid template state")
 	}
 	return args.tpl, nil
-}
-
-// do renders the specified font queries to w.
-func do(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args, cliargs []string) error {
-	if !rasterm.Available() {
-		return rasterm.ErrTermGraphicsNotAvailable
-	}
-	var fonts []*Font
-	// collect fonts
-	for i := 0; i < len(cliargs); i++ {
-		v, err := Open(sysfonts, cliargs[i], args.Style)
-		if err != nil {
-			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
-		}
-		fonts = append(fonts, v...)
-	}
-	return render(w, fonts, args, cliargs)
-}
-
-// doAll renders all system fonts to w.
-func doAll(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args, cliargs []string) error {
-	if !rasterm.Available() {
-		return rasterm.ErrTermGraphicsNotAvailable
-	}
-	// collect fonts
-	var fonts []*Font
-	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
-		for _, style := range slices.Sorted(maps.Keys(sysfonts.Fonts[family])) {
-			fonts = append(fonts, NewFont(sysfonts.Fonts[family][style]))
-		}
-	}
-	return render(w, fonts, args, cliargs)
-}
-
-func doList(w io.Writer, sysfonts *fontpkg.SystemFonts, _ *Args, _ []string) error {
-	for _, family := range slices.Sorted(maps.Keys(sysfonts.Fonts)) {
-		fmt.Fprintln(w, "---")
-		fmt.Fprintf(w, "family: %q\n", family)
-		fmt.Fprintln(w, "styles:")
-		for _, style := range slices.Sorted(maps.Keys(sysfonts.Fonts[family])) {
-			fmt.Fprintf(w, "  %s: %s\n", style, sysfonts.Fonts[family][style].Filename)
-		}
-	}
-	return nil
-}
-
-func doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, args *Args, cliargs []string) error {
-	for _, name := range cliargs {
-		if font := Match(sysfonts, name, args.Style); font != nil {
-			font.WriteYAML(w)
-		}
-	}
-	return nil
-}
-
-func render(w io.Writer, fonts []*Font, args *Args, cliargs []string) error {
-	tpl, err := args.Template()
-	if err != nil {
-		return err
-	}
-	for i := 0; i < len(fonts); i++ {
-		if err := fonts[i].Render(w, tpl, args); err != nil {
-			fmt.Fprintf(os.Stdout, "%s -- error: %v\n", fonts[i], err)
-		}
-		if i != len(fonts)-1 {
-			fmt.Fprintln(w)
-		}
-	}
-	return nil
-}
-
-type TemplateData struct {
-	Size       int
-	Name       string
-	Style      string
-	SampleText string
-}
-
-type Font struct {
-	Path       string
-	Family     string
-	Name       string
-	Style      string
-	SampleText string
-	once       sync.Once
-}
-
-func NewFont(md fontpkg.FontMetadata) *Font {
-	family := md.Family
-	if family == "" {
-		family = titleCase(strings.TrimSuffix(filepath.Base(md.Filename), filepath.Ext(md.Filename)))
-	}
-	return &Font{
-		Path:   md.Filename,
-		Family: family,
-		Style:  md.Style.String(),
-	}
-}
-
-func NewFontForPath(path string) *Font {
-	return &Font{
-		Path:   path,
-		Family: titleCase(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))),
-	}
-}
-
-func Match(sysfonts *fontpkg.SystemFonts, name string, style canvas.FontStyle) *Font {
-	md, ok := sysfonts.Match(name, fontpkg.ParseStyle(style.String()))
-	if !ok {
-		return nil
-	}
-	return NewFont(md)
-}
-
-// Open opens fonts.
-func Open(sysfonts *fontpkg.SystemFonts, name string, style canvas.FontStyle) ([]*Font, error) {
-	var v []*Font
-	switch fi, err := os.Stat(name); {
-	case err == nil && fi.IsDir():
-		entries, err := os.ReadDir(name)
-		if err != nil {
-			return nil, fmt.Errorf("unable to open directory %q: %v", name, err)
-		}
-		for _, entry := range entries {
-			if s := entry.Name(); !entry.IsDir() && extRE.MatchString(s) {
-				v = append(v, NewFontForPath(filepath.Join(name, s)))
-			}
-		}
-		sort.Slice(v, func(i, j int) bool {
-			return strings.ToLower(v[i].Family) < strings.ToLower(v[j].Family)
-		})
-	case err == nil:
-		v = append(v, NewFontForPath(name))
-	default:
-		if font := Match(sysfonts, name, style); font != nil {
-			v = append(v, font)
-		}
-	}
-	if len(v) == 0 {
-		return nil, fmt.Errorf("unable to locate font %q", name)
-	}
-	return v, nil
-}
-
-var extRE = regexp.MustCompile(`(?i)\.(ttf|ttc|otf|woff|woff2|sfnt)$`)
-
-func (font *Font) BestName() string {
-	if font.Name != "" {
-		return font.Name
-	}
-	return font.Family
-}
-
-func (font *Font) String() string {
-	name := font.BestName()
-	if font.Style != "" {
-		name += " (" + font.Style + ")"
-	}
-	return fmt.Sprintf("%q: %s", name, font.Path)
-}
-
-func (font *Font) WriteYAML(w io.Writer) {
-	fmt.Fprintln(w, "---")
-	fmt.Fprintf(w, "path: %s\n", font.Path)
-	fmt.Fprintf(w, "family: %q\n", font.BestName())
-	fmt.Fprintf(w, "style: %q\n", font.Style)
-}
-
-func (font *Font) Load(style canvas.FontStyle) (*canvas.FontFamily, error) {
-	ff := canvas.NewFontFamily(font.Family)
-	if err := ff.LoadFontFile(font.Path, style); err != nil {
-		return nil, err
-	}
-	font.once.Do(func() {
-		face := ff.Face(16)
-		if v := face.Font.SFNT.Name.Get(fontpkg.NameFontFamily); 0 < len(v) {
-			font.Name = v[0].String()
-		}
-		if v := face.Font.SFNT.Name.Get(fontpkg.NameFontSubfamily); 0 < len(v) {
-			font.Style = fontpkg.ParseStyle(v[0].String()).String()
-		}
-		if v := face.Font.SFNT.Name.Get(fontpkg.NameSampleText); 0 < len(v) {
-			font.SampleText = v[0].String()
-		}
-	})
-	return ff, nil
-}
-
-func (font *Font) Render(w io.Writer, tpl *template.Template, args *Args) error {
-	// load font family
-	ff, err := font.Load(args.Style)
-	if err != nil {
-		return err
-	}
-
-	// generate text
-	buf := new(bytes.Buffer)
-	if err := tpl.Execute(buf, TemplateData{
-		Size:       args.Size,
-		Name:       font.BestName(),
-		Style:      font.Style,
-		SampleText: font.SampleText,
-	}); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(w, "%s\n", font)
-
-	// create canvas and context
-	c := canvas.New(100, 100)
-	ctx := canvas.NewContext(c)
-
-	ctx.SetZIndex(1)
-	ctx.SetFillColor(args.Fg)
-
-	// draw text
-	lines, sizes := breakLines(buf.Bytes(), args.Size)
-	for i, y := 0, float64(0); i < len(lines); i++ {
-		face := ff.Face(float64(sizes[i]), args.Fg, args.Style, args.Variant)
-		txt := canvas.NewTextBox(face, strings.TrimSpace(lines[i]), 0, 0, canvas.Left, canvas.Top, 0, 0)
-		b := txt.Bounds()
-		ctx.DrawText(0, y, txt)
-		y += b.Y0 - b.Y1
-	}
-
-	// fit canvas to context
-	c.Fit(float64(args.Margin))
-
-	// draw background
-	ctx.SetZIndex(-1)
-	ctx.SetFillColor(args.Bg)
-	width, height := ctx.Size()
-	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
-
-	ctx.Close()
-
-	// encode
-	return rasterm.Encode(w, rasterizer.Draw(
-		c,
-		canvas.DPI(float64(args.Dpi)),
-		canvas.DefaultColorSpace,
-	))
-}
-
-func breakLines(buf []byte, size int) ([]string, []int) {
-	var lines []string
-	var sizes []int
-	for _, line := range bytes.Split(buf, []byte{'\n'}) {
-		sz := size
-		if m := sizeRE.FindSubmatch(line); m != nil {
-			if s, err := strconv.Atoi(string(m[1])); err == nil {
-				sz = s
-			}
-			line = m[2]
-		}
-		lines, sizes = append(lines, string(line)), append(sizes, sz)
-	}
-	return lines, sizes
-}
-
-var sizeRE = regexp.MustCompile(`^\x00([0-9]+)\x00(.*)$`)
-
-func titleCase(name string) string {
-	var prev rune
-	var s []rune
-	r := []rune(name)
-	for i, c := range r {
-		switch {
-		case unicode.IsLower(prev) && unicode.IsUpper(c):
-			s = append(s, ' ')
-		case !unicode.IsLetter(c):
-			c = ' '
-		}
-		if unicode.IsUpper(prev) && unicode.IsUpper(c) && unicode.IsLower(peek(r, i+1)) {
-			s = append(s, ' ')
-		}
-		s = append(s, c)
-		prev = c
-	}
-	return spaceRE.ReplaceAllString(strings.TrimSpace(string(s)), " ")
-}
-
-var spaceRE = regexp.MustCompile(`\s+`)
-
-func peek(r []rune, i int) rune {
-	if i < len(r) {
-		return r[i]
-	}
-	return 0
 }
 
 type Style struct {
