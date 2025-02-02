@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
 	"text/template"
 
 	"github.com/kenshaw/colors"
@@ -87,9 +86,6 @@ type Args struct {
 	Style   canvas.FontStyle   `ox:"font style"`
 	Variant canvas.FontVariant `ox:"font variant"`
 	Text    string             `ox:"display text"`
-
-	once sync.Once
-	tpl  *template.Template
 }
 
 // do renders the specified font queries to w.
@@ -146,9 +142,12 @@ func (args *Args) doMatch(w io.Writer, sysfonts *fontpkg.SystemFonts, cliargs []
 }
 
 func (args *Args) render(w io.Writer, fonts []*fontimg.Font) error {
-	tpl, err := args.templ()
-	if err != nil {
-		return err
+	var tpl *template.Template
+	if args.Text != "" {
+		var err error
+		if tpl, err = fontimg.NewTemplate(args.Text); err != nil {
+			return err
+		}
 	}
 	for i := 0; i < len(fonts); i++ {
 		img, err := fonts[i].Rasterize(
@@ -174,31 +173,6 @@ func (args *Args) render(w io.Writer, fonts []*fontimg.Font) error {
 		}
 	}
 	return nil
-}
-
-func (args *Args) templ() (*template.Template, error) {
-	var err error
-	args.once.Do(func() {
-		s := args.Text
-		if s == "" {
-			s = string(textTpl)
-		}
-		args.tpl, err = template.New("").Funcs(map[string]interface{}{
-			"size": func(size int) string {
-				return fmt.Sprintf("\x00%d\x00", size)
-			},
-			"inc": func(a, b int) int {
-				return a + b
-			},
-		}).Parse(s)
-	})
-	switch {
-	case err != nil:
-		return nil, err
-	case args.tpl == nil:
-		return nil, errors.New("invalid template state")
-	}
-	return args.tpl, nil
 }
 
 type Style struct {
@@ -287,6 +261,3 @@ func (variant Variant) Set(s string) error {
 func (variant Variant) Type() string {
 	return "font-variant"
 }
-
-//go:embed text.tpl
-var textTpl []byte
