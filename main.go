@@ -95,7 +95,7 @@ func (args *Args) do(w io.Writer, sysfonts *fontpkg.SystemFonts, cliargs []strin
 	}
 	var fonts []*fontimg.Font
 	// collect fonts
-	for i := 0; i < len(cliargs); i++ {
+	for i := range cliargs {
 		v, err := fontimg.Open(cliargs[i], args.Style, sysfonts)
 		if err != nil {
 			fmt.Fprintf(w, "error: unable to open arg %d: %v\n", i, err)
@@ -149,7 +149,8 @@ func (args *Args) render(w io.Writer, fonts []*fontimg.Font) error {
 			return err
 		}
 	}
-	for i := 0; i < len(fonts); i++ {
+	for i := range fonts {
+		fmt.Fprintf(w, "%s:\n", fonts[i].Family)
 		img, err := fonts[i].Rasterize(
 			tpl,
 			int(args.Size),
